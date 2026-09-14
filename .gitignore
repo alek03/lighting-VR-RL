@@ -5,3 +5,7 @@ venv/
 *.egg-info/
 .ipynb_checkpoints/
 .DS_Store
+
+# Run artifacts — visible in the editor sidebar, never committed
+captures/
+logs/
