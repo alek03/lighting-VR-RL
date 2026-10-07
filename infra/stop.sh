@@ -4,12 +4,13 @@
 #
 # Matches on `ps` output rather than using `pkill -f`: pkill's pattern also
 # matches the shell running it, so it kills itself before reaching the target.
+# Only your own processes: labmates run editors on this machine too.
 set -uo pipefail
 
 stop() {
     local label="$1" pattern="$2"
     local pids
-    pids=$(ps -eo pid,args | grep -- "$pattern" | grep -v grep | awk '{print $1}')
+    pids=$(ps -u "$(id -u)" -o pid,args | grep -- "$pattern" | grep -v grep | awk '{print $1}')
     if [ -z "$pids" ]; then
         echo "${label}: not running"
         return

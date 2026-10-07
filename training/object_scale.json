@@ -1,0 +1,12 @@
+{
+  "_about": "Workaround for models in the Oct 5 tufaelz update whose drawn geometry is out of sync with their stored bounds (measured 2026-10-06 on tufaelz_frozen_2026-10-06). Each factor scales the placed object so its drawn size matches its stored bounds (the realistic size); the object stays on the table because scaling is about its base. Measured from the silhouette's width in cm; verified after scaling (Golf Ball, a correct model, measured 4.3 cm against 4.3 cm stored). Remove an entry once the model itself is fixed.",
+  "scale": {
+    "Baseball": 0.494,
+    "Whistle": 0.396,
+    "SafetyPin": 0.25,
+    "Chair": 1.863,
+    "AcousticGuitar": 1.994,
+    "Apron": 1.976,
+    "Thimble": 0.2
+  }
+}

@@ -1,0 +1,9 @@
+# Install torch FIRST from the CUDA 12.8 index (see README): this host's NVIDIA
+# driver (570) supports CUDA <= 12.8, and PyPI's default torch wheels target a
+# newer CUDA, which installs cleanly but then cannot see the GPUs.
+torch>=2.5
+gymnasium>=1.0
+stable-baselines3>=2.4
+ultralytics>=8.3
+numpy
+pillow

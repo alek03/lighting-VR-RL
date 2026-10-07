@@ -1,0 +1,1926 @@
+{
+  "_about": {
+    "purpose": "Ground truth for scoring: which vision-model classes count as a correct identification of each table object.",
+    "catalog": "/opt/Unrealprojects/tufaelz/Config/objectlab_objects.json (id = catalog number)",
+    "dropped": "Objects left out of scoring are listed under \"dropped\"; ids keep their catalog numbers, so they skip.",
+    "yolo9000_files": "/opt/Unrealprojects/darknet/data/9k.names, 9k.labels, 9k.tree",
+    "rules": {
+      "yolo9000_accept": "A prediction is correct if it is one of these classes or any more specific class below it in the 9k tree (e.g. \"coffee mug\" counts for Mug). More general classes above it (\"container\") are partial hits, not correct. Classes are identified by wnid; index and name are for reading.",
+      "meaning": "The first few parents in the 9k tree, to show which sense of the word is meant.",
+      "yolo9000_box_trained": "Nearest COCO class in YOLO9000 at or above the accepted class. exact=true: YOLO9000 learned boxes for this class itself (most reliable). exact=false: only a more general class had boxes. null: learned from ImageNet labels only (least reliable).",
+      "coco_class": "Class to score with YOLO11m (80 COCO classes), or null if it has none.",
+      "review": "Non-obvious choices. Entries starting with DECIDE need a decision."
+    }
+  },
+  "dropped": [
+    {
+      "id": 14,
+      "object": "AudioCassette",
+      "reason": "no WordNet synonym matches a YOLO9000 class"
+    },
+    {
+      "id": 21,
+      "object": "BeltBuckle",
+      "reason": "no WordNet synonym matches a YOLO9000 class"
+    },
+    {
+      "id": 34,
+      "object": "DeskFan",
+      "reason": "no WordNet synonym matches a YOLO9000 class"
+    },
+    {
+      "id": 41,
+      "object": "HairClip",
+      "reason": "no WordNet synonym matches a YOLO9000 class"
+    },
+    {
+      "id": 64,
+      "object": "MortarAndPestle",
+      "reason": "no WordNet synonym matches a YOLO9000 class"
+    },
+    {
+      "id": 89,
+      "object": "ServingTray",
+      "reason": "no WordNet synonym matches a YOLO9000 class"
+    },
+    {
+      "id": 113,
+      "object": "WoodenCrate",
+      "reason": "no WordNet synonym matches a YOLO9000 class"
+    },
+    {
+      "id": 101,
+      "object": "TableTennisBall",
+      "reason": "no WordNet synonym matches a YOLO9000 class"
+    }
+  ],
+  "objects": [
+    {
+      "id": 1,
+      "object": "Mug",
+      "yolo9000_accept": [
+        {
+          "index": 3984,
+          "wnid": "n03797390",
+          "name": "mug",
+          "meaning": "drinking vessel < vessel < container"
+        },
+        {
+          "index": 3640,
+          "wnid": "n03147509",
+          "name": "cup",
+          "meaning": "container < instrumentality < artifact"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "cup",
+        "coco_class": "cup",
+        "exact": true
+      },
+      "coco_class": "cup",
+      "review": "\"cup\" accepted (decided 2026-10-06): only cup had box training in YOLO9000"
+    },
+    {
+      "id": 2,
+      "object": "Shoe",
+      "yolo9000_accept": [
+        {
+          "index": 4282,
+          "wnid": "n04199027",
+          "name": "shoe",
+          "meaning": "footwear < covering < artifact"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 3,
+      "object": "Apple",
+      "yolo9000_accept": [
+        {
+          "index": 42,
+          "wnid": "n07739125",
+          "name": "apple",
+          "meaning": "edible fruit < produce < food"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "apple",
+        "coco_class": "apple",
+        "exact": true
+      },
+      "coco_class": "apple",
+      "review": null
+    },
+    {
+      "id": 4,
+      "object": "Book",
+      "yolo9000_accept": [
+        {
+          "index": 1102,
+          "wnid": "n02870526",
+          "name": "book",
+          "meaning": "product < creation < artifact"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "book",
+        "coco_class": "book",
+        "exact": true
+      },
+      "coco_class": "book",
+      "review": null
+    },
+    {
+      "id": 5,
+      "object": "Bottle",
+      "yolo9000_accept": [
+        {
+          "index": 3916,
+          "wnid": "n02876657",
+          "name": "bottle",
+          "meaning": "vessel < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "bottle",
+        "coco_class": "bottle",
+        "exact": true
+      },
+      "coco_class": "bottle",
+      "review": null
+    },
+    {
+      "id": 6,
+      "object": "Chair",
+      "yolo9000_accept": [
+        {
+          "index": 2518,
+          "wnid": "n03001627",
+          "name": "chair",
+          "meaning": "seat < furniture < furnishing"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "chair",
+        "coco_class": "chair",
+        "exact": true
+      },
+      "coco_class": "chair",
+      "review": null
+    },
+    {
+      "id": 7,
+      "object": "Lamp",
+      "yolo9000_accept": [
+        {
+          "index": 3552,
+          "wnid": "n03636248",
+          "name": "lamp",
+          "meaning": "source of illumination < device < instrumentality"
+        },
+        {
+          "index": 2437,
+          "wnid": "n03636649",
+          "name": "lamp",
+          "meaning": "furniture < furnishing < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": "two \"lamp\" meanings (light source, furniture); both accepted"
+    },
+    {
+      "id": 8,
+      "object": "Bowl",
+      "yolo9000_accept": [
+        {
+          "index": 3678,
+          "wnid": "n02880940",
+          "name": "bowl",
+          "meaning": "dish < container < instrumentality"
+        },
+        {
+          "index": 3914,
+          "wnid": "n02881193",
+          "name": "bowl",
+          "meaning": "vessel < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "bowl",
+        "coco_class": "bowl",
+        "exact": true
+      },
+      "coco_class": "bowl",
+      "review": null
+    },
+    {
+      "id": 9,
+      "object": "Phone",
+      "yolo9000_accept": [
+        {
+          "index": 2080,
+          "wnid": "n02992529",
+          "name": "cellular telephone",
+          "meaning": "telephone < electronic equipment < equipment"
+        },
+        {
+          "index": 2058,
+          "wnid": "n04401088",
+          "name": "telephone",
+          "meaning": "electronic equipment < equipment < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "cellular telephone",
+        "coco_class": "cell phone",
+        "exact": true
+      },
+      "coco_class": "cell phone",
+      "review": "\"telephone\" (synonym: phone) accepted, so any kind of phone counts"
+    },
+    {
+      "id": 10,
+      "object": "Plant",
+      "yolo9000_accept": [
+        {
+          "index": 5173,
+          "wnid": "n00017222",
+          "name": "plant",
+          "meaning": "organism < living thing < whole"
+        },
+        {
+          "index": 5185,
+          "wnid": "n13083023",
+          "name": "houseplant",
+          "meaning": "plant < organism < living thing"
+        },
+        {
+          "index": 3637,
+          "wnid": "n03991062",
+          "name": "pot",
+          "meaning": "container < instrumentality < artifact"
+        },
+        {
+          "index": 4010,
+          "wnid": "n04522168",
+          "name": "vase",
+          "meaning": "jar < vessel < container"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "vase",
+        "coco_class": "vase",
+        "exact": true
+      },
+      "coco_class": "potted plant",
+      "review": "living-plant meaning of \"plant\" (not factory). \"pot\" accepted (YOLO9000 learned COCO \"potted plant\" boxes under \"pot\") and \"vase\" accepted (YOLO9000 calls the plant's pot a vase); decided 2026-10-06"
+    },
+    {
+      "id": 11,
+      "object": "Abacus",
+      "yolo9000_accept": [
+        {
+          "index": 2857,
+          "wnid": "n02666196",
+          "name": "abacus",
+          "meaning": "calculator < machine < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 12,
+      "object": "AcousticGuitar",
+      "yolo9000_accept": [
+        {
+          "index": 2671,
+          "wnid": "n02676566",
+          "name": "acoustic guitar",
+          "meaning": "guitar < stringed instrument < musical instrument"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 13,
+      "object": "Apron",
+      "yolo9000_accept": [
+        {
+          "index": 4803,
+          "wnid": "n02730930",
+          "name": "apron",
+          "meaning": "protective garment < clothing < consumer goods"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 15,
+      "object": "Backpack",
+      "yolo9000_accept": [
+        {
+          "index": 3704,
+          "wnid": "n02769748",
+          "name": "backpack",
+          "meaning": "bag < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "backpack",
+        "coco_class": "backpack",
+        "exact": true
+      },
+      "coco_class": "backpack",
+      "review": null
+    },
+    {
+      "id": 16,
+      "object": "Banana",
+      "yolo9000_accept": [
+        {
+          "index": 58,
+          "wnid": "n07753592",
+          "name": "banana",
+          "meaning": "edible fruit < produce < food"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "banana",
+        "coco_class": "banana",
+        "exact": true
+      },
+      "coco_class": "banana",
+      "review": null
+    },
+    {
+      "id": 17,
+      "object": "Baseball",
+      "yolo9000_accept": [
+        {
+          "index": 2043,
+          "wnid": "n02799071",
+          "name": "baseball",
+          "meaning": "ball < game equipment < equipment"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "ball",
+        "coco_class": "sports ball",
+        "exact": false
+      },
+      "coco_class": "sports ball",
+      "review": null
+    },
+    {
+      "id": 18,
+      "object": "Basketball",
+      "yolo9000_accept": [
+        {
+          "index": 2039,
+          "wnid": "n02802426",
+          "name": "basketball",
+          "meaning": "ball < game equipment < equipment"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "ball",
+        "coco_class": "sports ball",
+        "exact": false
+      },
+      "coco_class": "sports ball",
+      "review": null
+    },
+    {
+      "id": 19,
+      "object": "BeerGlass",
+      "yolo9000_accept": [
+        {
+          "index": 3742,
+          "wnid": "n02823750",
+          "name": "beer glass",
+          "meaning": "glass < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 20,
+      "object": "BellPepper",
+      "yolo9000_accept": [
+        {
+          "index": 166,
+          "wnid": "n07720875",
+          "name": "bell pepper",
+          "meaning": "sweet pepper < pepper < solanaceous vegetable"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 22,
+      "object": "Binoculars",
+      "yolo9000_accept": [
+        {
+          "index": 3339,
+          "wnid": "n02841315",
+          "name": "binoculars",
+          "meaning": "optical instrument < instrument < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 23,
+      "object": "Birdhouse",
+      "yolo9000_accept": [
+        {
+          "index": 4370,
+          "wnid": "n02843684",
+          "name": "birdhouse",
+          "meaning": "shelter < protective covering < covering"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 24,
+      "object": "BowTie",
+      "yolo9000_accept": [
+        {
+          "index": 5005,
+          "wnid": "n02883205",
+          "name": "bow tie",
+          "meaning": "necktie < neckwear < garment"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "necktie",
+        "coco_class": "tie",
+        "exact": false
+      },
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 25,
+      "object": "Bucket",
+      "yolo9000_accept": [
+        {
+          "index": 3922,
+          "wnid": "n02909870",
+          "name": "bucket",
+          "meaning": "vessel < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 26,
+      "object": "CanOpener",
+      "yolo9000_accept": [
+        {
+          "index": 2251,
+          "wnid": "n02951585",
+          "name": "can opener",
+          "meaning": "opener < hand tool < tool"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 27,
+      "object": "Candle",
+      "yolo9000_accept": [
+        {
+          "index": 3556,
+          "wnid": "n02948072",
+          "name": "candle",
+          "meaning": "lamp < source of illumination < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 28,
+      "object": "Chain",
+      "yolo9000_accept": [
+        {
+          "index": 3376,
+          "wnid": "n02999936",
+          "name": "chain",
+          "meaning": "restraint < device < instrumentality"
+        },
+        {
+          "index": 2140,
+          "wnid": "n02999410",
+          "name": "chain",
+          "meaning": "ligament < connection < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": "two \"chain\" meanings; both accepted"
+    },
+    {
+      "id": 29,
+      "object": "Cleaver",
+      "yolo9000_accept": [
+        {
+          "index": 2280,
+          "wnid": "n03041632",
+          "name": "cleaver",
+          "meaning": "knife < edge tool < cutter"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 30,
+      "object": "Comb",
+      "yolo9000_accept": [
+        {
+          "index": 2209,
+          "wnid": "n03075097",
+          "name": "comb",
+          "meaning": "tool < implement < instrumentality"
+        },
+        {
+          "index": 2596,
+          "wnid": "n03074855",
+          "name": "comb",
+          "meaning": "device < instrumentality < artifact"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 31,
+      "object": "ComputerMouse",
+      "yolo9000_accept": [
+        {
+          "index": 3503,
+          "wnid": "n03793489",
+          "name": "mouse",
+          "meaning": "electronic device < device < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "mouse",
+        "coco_class": "mouse",
+        "exact": true
+      },
+      "coco_class": "mouse",
+      "review": "the electronic-device \"mouse\", not the animal"
+    },
+    {
+      "id": 32,
+      "object": "Corkscrew",
+      "yolo9000_accept": [
+        {
+          "index": 2249,
+          "wnid": "n03109150",
+          "name": "corkscrew",
+          "meaning": "opener < hand tool < tool"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 33,
+      "object": "CowboyHat",
+      "yolo9000_accept": [
+        {
+          "index": 4830,
+          "wnid": "n03124170",
+          "name": "cowboy hat",
+          "meaning": "hat < headdress < clothing"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 35,
+      "object": "Dumbbell",
+      "yolo9000_accept": [
+        {
+          "index": 1973,
+          "wnid": "n03255030",
+          "name": "dumbbell",
+          "meaning": "weight < sports equipment < equipment"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 36,
+      "object": "Envelope",
+      "yolo9000_accept": [
+        {
+          "index": 3649,
+          "wnid": "n03291819",
+          "name": "envelope",
+          "meaning": "container < instrumentality < artifact"
+        },
+        {
+          "index": 3716,
+          "wnid": "n03291963",
+          "name": "envelope",
+          "meaning": "bag < container < instrumentality"
+        },
+        {
+          "index": 4424,
+          "wnid": "n03291741",
+          "name": "envelope",
+          "meaning": "wrapping < covering < artifact"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": "three \"envelope\" meanings; all accepted"
+    },
+    {
+      "id": 37,
+      "object": "Flashlight",
+      "yolo9000_accept": [
+        {
+          "index": 3569,
+          "wnid": "n03359137",
+          "name": "flashlight",
+          "meaning": "electric lamp < lamp < source of illumination"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 38,
+      "object": "FountainPen",
+      "yolo9000_accept": [
+        {
+          "index": 2427,
+          "wnid": "n03388183",
+          "name": "fountain pen",
+          "meaning": "pen < writing implement < implement"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 39,
+      "object": "FryingPan",
+      "yolo9000_accept": [
+        {
+          "index": 2325,
+          "wnid": "n03400231",
+          "name": "frying pan",
+          "meaning": "pan < cooking utensil < kitchen utensil"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 40,
+      "object": "GolfBall",
+      "yolo9000_accept": [
+        {
+          "index": 2035,
+          "wnid": "n03445777",
+          "name": "golf ball",
+          "meaning": "ball < game equipment < equipment"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "ball",
+        "coco_class": "sports ball",
+        "exact": false
+      },
+      "coco_class": "sports ball",
+      "review": null
+    },
+    {
+      "id": 42,
+      "object": "HairDryer",
+      "yolo9000_accept": [
+        {
+          "index": 5122,
+          "wnid": "n03483316",
+          "name": "hand blower",
+          "meaning": "dryer < appliance < consumer goods"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "hand blower",
+        "coco_class": "hair drier",
+        "exact": true
+      },
+      "coco_class": "hair drier",
+      "review": null
+    },
+    {
+      "id": 43,
+      "object": "Hammer",
+      "yolo9000_accept": [
+        {
+          "index": 2223,
+          "wnid": "n03481172",
+          "name": "hammer",
+          "meaning": "hand tool < tool < implement"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 44,
+      "object": "Harmonica",
+      "yolo9000_accept": [
+        {
+          "index": 2719,
+          "wnid": "n03494278",
+          "name": "harmonica",
+          "meaning": "free-reed instrument < wind instrument < musical instrument"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 45,
+      "object": "Hatchet",
+      "yolo9000_accept": [
+        {
+          "index": 2288,
+          "wnid": "n03498962",
+          "name": "hatchet",
+          "meaning": "ax < edge tool < cutter"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 46,
+      "object": "Headphones",
+      "yolo9000_accept": [
+        {
+          "index": 3462,
+          "wnid": "n03261776",
+          "name": "earphone",
+          "meaning": "electro-acoustic transducer < transducer < electrical device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": "no \"headphones\" class; earphone (includes headset)"
+    },
+    {
+      "id": 47,
+      "object": "HockeyPuck",
+      "yolo9000_accept": [
+        {
+          "index": 2996,
+          "wnid": "n04019541",
+          "name": "puck",
+          "meaning": "disk < circle < rotating mechanism"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": "\"puck\" is the hockey puck (WordNet synonym hockey_puck); its 9k-tree parents (disk < circle < rotating mechanism) are misleading"
+    },
+    {
+      "id": 48,
+      "object": "Hourglass",
+      "yolo9000_accept": [
+        {
+          "index": 3244,
+          "wnid": "n03544143",
+          "name": "hourglass",
+          "meaning": "timepiece < measuring instrument < instrument"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "timepiece",
+        "coco_class": "clock",
+        "exact": false
+      },
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 49,
+      "object": "Joystick",
+      "yolo9000_accept": [
+        {
+          "index": 3006,
+          "wnid": "n03602883",
+          "name": "joystick",
+          "meaning": "control < mechanism < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 50,
+      "object": "Keyboard",
+      "yolo9000_accept": [
+        {
+          "index": 2610,
+          "wnid": "n03614007",
+          "name": "keyboard",
+          "meaning": "device < instrumentality < artifact"
+        },
+        {
+          "index": 3430,
+          "wnid": "n03085013",
+          "name": "computer keyboard",
+          "meaning": "keyboard < device < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "computer keyboard",
+        "coco_class": "keyboard",
+        "exact": true
+      },
+      "coco_class": "keyboard",
+      "review": "generic \"keyboard\" accepted (decided 2026-10-06), so its sub-classes count too, including typewriter and piano keyboard"
+    },
+    {
+      "id": 51,
+      "object": "Ladle",
+      "yolo9000_accept": [
+        {
+          "index": 3915,
+          "wnid": "n03633091",
+          "name": "ladle",
+          "meaning": "vessel < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 52,
+      "object": "Laptop",
+      "yolo9000_accept": [
+        {
+          "index": 2837,
+          "wnid": "n03642806",
+          "name": "laptop",
+          "meaning": "portable computer < personal computer < digital computer"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "laptop",
+        "coco_class": "laptop",
+        "exact": true
+      },
+      "coco_class": "laptop",
+      "review": null
+    },
+    {
+      "id": 53,
+      "object": "Lemon",
+      "yolo9000_accept": [
+        {
+          "index": 82,
+          "wnid": "n07749582",
+          "name": "lemon",
+          "meaning": "citrus < edible fruit < produce"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 54,
+      "object": "LetterOpener",
+      "yolo9000_accept": [
+        {
+          "index": 2284,
+          "wnid": "n03658185",
+          "name": "letter opener",
+          "meaning": "knife < edge tool < cutter"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 55,
+      "object": "Lighter",
+      "yolo9000_accept": [
+        {
+          "index": 2562,
+          "wnid": "n03666591",
+          "name": "lighter",
+          "meaning": "device < instrumentality < artifact"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 56,
+      "object": "Lipstick",
+      "yolo9000_accept": [
+        {
+          "index": 1876,
+          "wnid": "n03676483",
+          "name": "lipstick",
+          "meaning": "makeup < cosmetic < toiletry"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 57,
+      "object": "Loudspeaker",
+      "yolo9000_accept": [
+        {
+          "index": 3464,
+          "wnid": "n03691459",
+          "name": "loudspeaker",
+          "meaning": "electro-acoustic transducer < transducer < electrical device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 58,
+      "object": "MagneticCompass",
+      "yolo9000_accept": [
+        {
+          "index": 3337,
+          "wnid": "n03706229",
+          "name": "magnetic compass",
+          "meaning": "navigational instrument < instrument < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 59,
+      "object": "MagnifyingGlass",
+      "yolo9000_accept": [
+        {
+          "index": 3185,
+          "wnid": "n03709206",
+          "name": "magnifier",
+          "meaning": "scientific instrument < instrument < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": "\"magnifier\" also covers telescopes and microscopes"
+    },
+    {
+      "id": 60,
+      "object": "Maraca",
+      "yolo9000_accept": [
+        {
+          "index": 2740,
+          "wnid": "n03720891",
+          "name": "maraca",
+          "meaning": "percussion instrument < musical instrument < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 61,
+      "object": "Matchstick",
+      "yolo9000_accept": [
+        {
+          "index": 2343,
+          "wnid": "n03729826",
+          "name": "matchstick",
+          "meaning": "stick < implement < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 62,
+      "object": "Microphone",
+      "yolo9000_accept": [
+        {
+          "index": 3463,
+          "wnid": "n03759954",
+          "name": "microphone",
+          "meaning": "electro-acoustic transducer < transducer < electrical device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 63,
+      "object": "Mitten",
+      "yolo9000_accept": [
+        {
+          "index": 5041,
+          "wnid": "n03775071",
+          "name": "mitten",
+          "meaning": "glove < clothing < consumer goods"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 65,
+      "object": "Mousetrap",
+      "yolo9000_accept": [
+        {
+          "index": 3042,
+          "wnid": "n03794056",
+          "name": "mousetrap",
+          "meaning": "trap < device < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 66,
+      "object": "Mushroom",
+      "yolo9000_accept": [
+        {
+          "index": 118,
+          "wnid": "n07734744",
+          "name": "mushroom",
+          "meaning": "vegetable < produce < food"
+        },
+        {
+          "index": 9247,
+          "wnid": "n12997919",
+          "name": "mushroom",
+          "meaning": "basidiomycete < fungus < organism"
+        },
+        {
+          "index": 9251,
+          "wnid": "n13001041",
+          "name": "mushroom",
+          "meaning": "agaric < basidiomycete < fungus"
+        },
+        {
+          "index": 9253,
+          "wnid": "n13000891",
+          "name": "mushroom",
+          "meaning": "agaric < basidiomycete < fungus"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 67,
+      "object": "Orange",
+      "yolo9000_accept": [
+        {
+          "index": 81,
+          "wnid": "n07747607",
+          "name": "orange",
+          "meaning": "citrus < edible fruit < produce"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "orange",
+        "coco_class": "orange",
+        "exact": true
+      },
+      "coco_class": "orange",
+      "review": null
+    },
+    {
+      "id": 68,
+      "object": "Padlock",
+      "yolo9000_accept": [
+        {
+          "index": 3417,
+          "wnid": "n03874599",
+          "name": "padlock",
+          "meaning": "lock < fastener < restraint"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 69,
+      "object": "Paintbrush",
+      "yolo9000_accept": [
+        {
+          "index": 3366,
+          "wnid": "n03876231",
+          "name": "paintbrush",
+          "meaning": "applicator < device < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 70,
+      "object": "PencilSharpener",
+      "yolo9000_accept": [
+        {
+          "index": 2366,
+          "wnid": "n03908714",
+          "name": "pencil sharpener",
+          "meaning": "sharpener < implement < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 71,
+      "object": "PiggyBank",
+      "yolo9000_accept": [
+        {
+          "index": 3651,
+          "wnid": "n03935335",
+          "name": "piggy bank",
+          "meaning": "container < instrumentality < artifact"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 72,
+      "object": "Pillow",
+      "yolo9000_accept": [
+        {
+          "index": 4248,
+          "wnid": "n03938244",
+          "name": "pillow",
+          "meaning": "padding < artifact < whole"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 73,
+      "object": "Pineapple",
+      "yolo9000_accept": [
+        {
+          "index": 64,
+          "wnid": "n07753275",
+          "name": "pineapple",
+          "meaning": "edible fruit < produce < food"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 74,
+      "object": "Plate",
+      "yolo9000_accept": [
+        {
+          "index": 4013,
+          "wnid": "n03960374",
+          "name": "plate",
+          "meaning": "receptacle < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 75,
+      "object": "Plunger",
+      "yolo9000_accept": [
+        {
+          "index": 2218,
+          "wnid": "n03970156",
+          "name": "plunger",
+          "meaning": "hand tool < tool < implement"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 76,
+      "object": "PowerDrill",
+      "yolo9000_accept": [
+        {
+          "index": 2256,
+          "wnid": "n03995372",
+          "name": "power drill",
+          "meaning": "drill < tool < implement"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 77,
+      "object": "Purse",
+      "yolo9000_accept": [
+        {
+          "index": 3714,
+          "wnid": "n04026417",
+          "name": "purse",
+          "meaning": "bag < container < instrumentality"
+        },
+        {
+          "index": 3641,
+          "wnid": "n02774152",
+          "name": "bag",
+          "meaning": "container < instrumentality < artifact"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "bag",
+        "coco_class": "handbag",
+        "exact": true
+      },
+      "coco_class": "handbag",
+      "review": "\"bag\" = handbag/pocketbook/purse (WordNet synonyms) and is the box-trained COCO handbag class"
+    },
+    {
+      "id": 78,
+      "object": "ReflexCamera",
+      "yolo9000_accept": [
+        {
+          "index": 1988,
+          "wnid": "n04069434",
+          "name": "reflex camera",
+          "meaning": "camera < photographic equipment < equipment"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 79,
+      "object": "RemoteControl",
+      "yolo9000_accept": [
+        {
+          "index": 2597,
+          "wnid": "n04074963",
+          "name": "remote control",
+          "meaning": "device < instrumentality < artifact"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "remote control",
+        "coco_class": "remote",
+        "exact": true
+      },
+      "coco_class": "remote",
+      "review": null
+    },
+    {
+      "id": 80,
+      "object": "RollingPin",
+      "yolo9000_accept": [
+        {
+          "index": 2300,
+          "wnid": "n04103206",
+          "name": "rolling pin",
+          "meaning": "kitchen utensil < utensil < implement"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 81,
+      "object": "RubberEraser",
+      "yolo9000_accept": [
+        {
+          "index": 2166,
+          "wnid": "n04116512",
+          "name": "rubber eraser",
+          "meaning": "implement < instrumentality < artifact"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 82,
+      "object": "RugbyBall",
+      "yolo9000_accept": [
+        {
+          "index": 2036,
+          "wnid": "n04118538",
+          "name": "rugby ball",
+          "meaning": "ball < game equipment < equipment"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "ball",
+        "coco_class": "sports ball",
+        "exact": false
+      },
+      "coco_class": "sports ball",
+      "review": null
+    },
+    {
+      "id": 83,
+      "object": "Ruler",
+      "yolo9000_accept": [
+        {
+          "index": 3228,
+          "wnid": "n04118776",
+          "name": "rule",
+          "meaning": "measuring instrument < instrument < device"
+        },
+        {
+          "index": 3216,
+          "wnid": "n03735637",
+          "name": "measuring stick",
+          "meaning": "measuring instrument < instrument < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": "\"ruler\" in YOLO9000 is a person; rule / measuring stick used"
+    },
+    {
+      "id": 84,
+      "object": "SafetyPin",
+      "yolo9000_accept": [
+        {
+          "index": 3410,
+          "wnid": "n04127249",
+          "name": "safety pin",
+          "meaning": "pin < fastener < restraint"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 85,
+      "object": "SaltShaker",
+      "yolo9000_accept": [
+        {
+          "index": 3747,
+          "wnid": "n04131690",
+          "name": "saltshaker",
+          "meaning": "shaker < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 86,
+      "object": "Scissors",
+      "yolo9000_accept": [
+        {
+          "index": 2266,
+          "wnid": "n04148054",
+          "name": "scissors",
+          "meaning": "edge tool < cutter < cutting implement"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "scissors",
+        "coco_class": "scissors",
+        "exact": true
+      },
+      "coco_class": "scissors",
+      "review": null
+    },
+    {
+      "id": 87,
+      "object": "Screw",
+      "yolo9000_accept": [
+        {
+          "index": 3385,
+          "wnid": "n04153751",
+          "name": "screw",
+          "meaning": "fastener < restraint < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": "the fastener meaning (not propeller or inclined plane)"
+    },
+    {
+      "id": 88,
+      "object": "Screwdriver",
+      "yolo9000_accept": [
+        {
+          "index": 2226,
+          "wnid": "n04154565",
+          "name": "screwdriver",
+          "meaning": "hand tool < tool < implement"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 90,
+      "object": "ShoppingBasket",
+      "yolo9000_accept": [
+        {
+          "index": 3753,
+          "wnid": "n04204238",
+          "name": "shopping basket",
+          "meaning": "basket < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 91,
+      "object": "Shovel",
+      "yolo9000_accept": [
+        {
+          "index": 2231,
+          "wnid": "n04208210",
+          "name": "shovel",
+          "meaning": "hand tool < tool < implement"
+        },
+        {
+          "index": 2182,
+          "wnid": "n04208427",
+          "name": "shovel",
+          "meaning": "implement < instrumentality < artifact"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 92,
+      "object": "SoccerBall",
+      "yolo9000_accept": [
+        {
+          "index": 2025,
+          "wnid": "n04254680",
+          "name": "soccer ball",
+          "meaning": "ball < game equipment < equipment"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "ball",
+        "coco_class": "sports ball",
+        "exact": false
+      },
+      "coco_class": "sports ball",
+      "review": null
+    },
+    {
+      "id": 93,
+      "object": "Sock",
+      "yolo9000_accept": [
+        {
+          "index": 5050,
+          "wnid": "n04254777",
+          "name": "sock",
+          "meaning": "hosiery < footwear < clothing"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 94,
+      "object": "Spatula",
+      "yolo9000_accept": [
+        {
+          "index": 2316,
+          "wnid": "n04270147",
+          "name": "spatula",
+          "meaning": "cooking utensil < kitchen utensil < utensil"
+        },
+        {
+          "index": 2233,
+          "wnid": "n04269944",
+          "name": "spatula",
+          "meaning": "hand tool < tool < implement"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 95,
+      "object": "SteamIron",
+      "yolo9000_accept": [
+        {
+          "index": 5094,
+          "wnid": "n04309833",
+          "name": "steam iron",
+          "meaning": "iron < home appliance < appliance"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 96,
+      "object": "Stethoscope",
+      "yolo9000_accept": [
+        {
+          "index": 3352,
+          "wnid": "n04317175",
+          "name": "stethoscope",
+          "meaning": "medical instrument < instrument < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 97,
+      "object": "Strainer",
+      "yolo9000_accept": [
+        {
+          "index": 2887,
+          "wnid": "n04332243",
+          "name": "strainer",
+          "meaning": "filter < device < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 98,
+      "object": "Strawberry",
+      "yolo9000_accept": [
+        {
+          "index": 100,
+          "wnid": "n07745940",
+          "name": "strawberry",
+          "meaning": "berry < edible fruit < produce"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 99,
+      "object": "Sunglasses",
+      "yolo9000_accept": [
+        {
+          "index": 3344,
+          "wnid": "n04356056",
+          "name": "sunglasses",
+          "meaning": "spectacles < optical instrument < instrument"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 100,
+      "object": "Syringe",
+      "yolo9000_accept": [
+        {
+          "index": 3351,
+          "wnid": "n04376876",
+          "name": "syringe",
+          "meaning": "medical instrument < instrument < device"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 102,
+      "object": "Teapot",
+      "yolo9000_accept": [
+        {
+          "index": 3969,
+          "wnid": "n04398044",
+          "name": "teapot",
+          "meaning": "pot < vessel < container"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 103,
+      "object": "TeddyBear",
+      "yolo9000_accept": [
+        {
+          "index": 1127,
+          "wnid": "n04399382",
+          "name": "teddy",
+          "meaning": "plaything < artifact < whole"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "teddy",
+        "coco_class": "teddy bear",
+        "exact": true
+      },
+      "coco_class": "teddy bear",
+      "review": null
+    },
+    {
+      "id": 104,
+      "object": "TennisRacket",
+      "yolo9000_accept": [
+        {
+          "index": 2371,
+          "wnid": "n04409806",
+          "name": "tennis racket",
+          "meaning": "racket < sports implement < implement"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "tennis racket",
+        "coco_class": "tennis racket",
+        "exact": true
+      },
+      "coco_class": "tennis racket",
+      "review": null
+    },
+    {
+      "id": 105,
+      "object": "Thimble",
+      "yolo9000_accept": [
+        {
+          "index": 4396,
+          "wnid": "n04423845",
+          "name": "thimble",
+          "meaning": "cap < protective covering < covering"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 106,
+      "object": "Toaster",
+      "yolo9000_accept": [
+        {
+          "index": 5102,
+          "wnid": "n04442312",
+          "name": "toaster",
+          "meaning": "kitchen appliance < home appliance < appliance"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "toaster",
+        "coco_class": "toaster",
+        "exact": true
+      },
+      "coco_class": "toaster",
+      "review": null
+    },
+    {
+      "id": 107,
+      "object": "Umbrella",
+      "yolo9000_accept": [
+        {
+          "index": 4374,
+          "wnid": "n04507155",
+          "name": "umbrella",
+          "meaning": "canopy < shelter < protective covering"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "umbrella",
+        "coco_class": "umbrella",
+        "exact": true
+      },
+      "coco_class": "umbrella",
+      "review": null
+    },
+    {
+      "id": 108,
+      "object": "Vase",
+      "yolo9000_accept": [
+        {
+          "index": 4010,
+          "wnid": "n04522168",
+          "name": "vase",
+          "meaning": "jar < vessel < container"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "vase",
+        "coco_class": "vase",
+        "exact": true
+      },
+      "coco_class": "vase",
+      "review": null
+    },
+    {
+      "id": 109,
+      "object": "WallClock",
+      "yolo9000_accept": [
+        {
+          "index": 3248,
+          "wnid": "n04548280",
+          "name": "wall clock",
+          "meaning": "clock < timepiece < measuring instrument"
+        },
+        {
+          "index": 3240,
+          "wnid": "n03046257",
+          "name": "clock",
+          "meaning": "timepiece < measuring instrument < instrument"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "timepiece",
+        "coco_class": "clock",
+        "exact": false
+      },
+      "coco_class": "clock",
+      "review": "any kind of \"clock\" accepted (decided 2026-10-06): YOLO9000 often answers \"analog clock\" or \"pendulum clock\""
+    },
+    {
+      "id": 110,
+      "object": "Wallet",
+      "yolo9000_accept": [
+        {
+          "index": 3888,
+          "wnid": "n04548362",
+          "name": "wallet",
+          "meaning": "case < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 111,
+      "object": "Whistle",
+      "yolo9000_accept": [
+        {
+          "index": 2701,
+          "wnid": "n04579667",
+          "name": "whistle",
+          "meaning": "wind instrument < musical instrument < device"
+        },
+        {
+          "index": 3033,
+          "wnid": "n04579432",
+          "name": "whistle",
+          "meaning": "acoustic device < device < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": null,
+      "coco_class": null,
+      "review": null
+    },
+    {
+      "id": 112,
+      "object": "WineGlass",
+      "yolo9000_accept": [
+        {
+          "index": 3745,
+          "wnid": "n04592099",
+          "name": "wineglass",
+          "meaning": "glass < container < instrumentality"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "wineglass",
+        "coco_class": "wine glass",
+        "exact": true
+      },
+      "coco_class": "wine glass",
+      "review": null
+    },
+    {
+      "id": 114,
+      "object": "WoodenSpoon",
+      "yolo9000_accept": [
+        {
+          "index": 4742,
+          "wnid": "n04597913",
+          "name": "wooden spoon",
+          "meaning": "spoon < cutlery < tableware"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "spoon",
+        "coco_class": "spoon",
+        "exact": false
+      },
+      "coco_class": "spoon",
+      "review": null
+    },
+    {
+      "id": 115,
+      "object": "Wristwatch",
+      "yolo9000_accept": [
+        {
+          "index": 3255,
+          "wnid": "n04607869",
+          "name": "wristwatch",
+          "meaning": "watch < timepiece < measuring instrument"
+        }
+      ],
+      "yolo9000_box_trained": {
+        "node": "timepiece",
+        "coco_class": "clock",
+        "exact": false
+      },
+      "coco_class": null,
+      "review": null
+    }
+  ]
+}

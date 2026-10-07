@@ -9,3 +9,7 @@ venv/
 # Run artifacts — visible in the editor sidebar, never committed
 captures/
 logs/
+deliverables/
+
+# Downloaded model weights
+models/
