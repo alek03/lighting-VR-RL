@@ -13,7 +13,8 @@ around the object to maximise a vision model's confidence in identifying it.
 - `training/object_classes.json` — which YOLO9000 classes count as correct for each object
 - `training/object_scale.json` — scale fixes for models whose drawn size ≠ stored bounds
 - `infra/` — starting/stopping the editor, plus the older live-viewer stack (see below)
-- `reports/` — running report notes; `HOW_IT_WORKS.md` — guided tour of the code
+- `ReadMes/` — **start here**: setup, reproducing the experiment, one README per script, and `HOW_IT_WORKS.md` (guided tour)
+- `reports/` — running report notes: decisions, measurements, results
 - `captures/`, `logs/`, `deliverables/` — run artifacts, gitignored
 
 The Unreal project is not in this repo: `/opt/Unrealprojects/tufaelz` (mostly binary `.uasset`

@@ -16,7 +16,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 MODELS = REPO / 'models'
-DARKNET = Path('/opt/Unrealprojects/darknet')
+DARKNET = Path(os.environ.get('DARKNET_DIR', '/opt/Unrealprojects/darknet'))
 OBJECT_CLASSES = REPO / 'training' / 'object_classes.json'
 
 # Table object -> COCO class name.

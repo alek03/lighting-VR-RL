@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-POSE = Path('/opt/Unrealprojects/tufaelz/Scripts/pose.json')
+POSE = Path(os.environ.get('VRNAV_POSE', '/opt/Unrealprojects/tufaelz/Scripts/pose.json'))
 
 
 class UnrealError(RuntimeError):

@@ -21,6 +21,7 @@ crops the 91 cm chair or leaves the 1.6 cm-thick phone a few pixels tall.
 import argparse
 import json
 import math
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -31,7 +32,8 @@ from PIL import Image
 from bridge_client.unreal_client import UnrealClient, wait_for_file
 
 REPO = Path(__file__).resolve().parents[1]
-POSE = Path('/opt/Unrealprojects/tufaelz/Scripts/pose.json')
+# The recorded VR camera pose; override with VRNAV_POSE (e.g. a frozen project copy's Scripts/pose.json).
+POSE = Path(os.environ.get('VRNAV_POSE', '/opt/Unrealprojects/tufaelz/Scripts/pose.json'))
 CONFIG = REPO / 'training' / 'scene_config.json'
 MAP = REPO / 'captures' / 'room_map.png'
 OBJECT_SCALE = json.loads((REPO / 'training' / 'object_scale.json').read_text())['scale']
@@ -645,6 +647,85 @@ def sweep_sphere(args):
     print('wrote', table)
 
 
+def check_objects(args):
+    """Render every object once with the calibrated camera and capture its mask, to catch models
+    whose drawn size does not match their stored bounds (as found in the Oct 5 project update).
+
+    Flags an object if its silhouette overflows the frame, is missing, or overlaps its projected
+    3D bounds box with IoU < 0.4; for flagged objects it measures the drawn width in cm (zooming
+    out until the object fits) and suggests a scale factor for object_scale.json. Writes
+    <out>/object_check.json, <out>/contact_sheet.jpg (green = silhouette box, magenta = bounds)
+    and one frame per object. Objects already in object_scale.json are placed scaled."""
+    from PIL import ImageDraw
+    from training.vision import box_overlap
+    cfg = json.loads(CONFIG.read_text())
+    catalogue = [o['object'] for o in json.loads((REPO / 'training' / 'object_classes.json').read_text())['objects']]
+    names = args.objects or catalogue
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    size = cfg['camera']['width']
+
+    def drawn_width(scene):
+        """Drawn width across the camera (cm), zooming out until the silhouette fits."""
+        for fill in (0.5, 0.25, 0.12, 0.06, 0.03, 0.015):
+            scene.aim_camera(fill)
+            scene.light(0, 30, cfg['light']['radius_cm'])
+            scene.capture(2)
+            mb = mask_box(scene.capture_mask())
+            if mb and min(mb[:2]) > 1 and max(mb[2:]) < size - 1:
+                cm_px = 2 * math.dist(scene.camera['location'], scene.centre) * math.tan(math.radians(scene.camera['fov'] / 2)) / size
+                return (mb[2] - mb[0]) * cm_px
+        return None
+
+    rows, thumbs = [], []
+    with UnrealClient(timeout=300) as ue:
+        scene = Scene(ue, size, size, cfg['render']['world'], cfg['camera']['height_cm'], cfg['camera']['fill'],
+                      cfg['render'].get('supersample', 2))
+        try:
+            for name in names:
+                scene.load(name)
+                scene.light(120, 45, cfg['light']['radius_cm'])
+                img = scene.capture(cfg['render']['settle_frames'])
+                mask = scene.capture_mask()
+                mb, pb = mask_box(mask), scene.object_box()
+                edge = bool(mb) and bool(mb[0] <= 1 or mb[1] <= 1 or mb[2] >= size - 1 or mb[3] >= size - 1)
+                iou = round(float(box_overlap(mb, pb)['iou']), 3) if mb else None
+                row = {'object': name, 'scale_applied': OBJECT_SCALE.get(name, 1.0), 'iou_silhouette_vs_bounds': iou,
+                       'overflows_frame': edge, 'missing': mb is None,
+                       'span': round(max(mb[2] - mb[0], mb[3] - mb[1]) / size, 3) if mb else 0.0,
+                       'brightness': round(float(img[mask].mean()), 1) if mask.any() else None}
+                row['flagged'] = bool(row['missing'] or edge or iou < 0.4)
+                if row['flagged']:
+                    stored = scene.info['objects'][name]['size_cm'][1]       # across the camera, which looks along +X
+                    w = drawn_width(scene)
+                    row['stored_width_cm'] = stored
+                    row['drawn_width_cm'] = round(w, 1) if w else None
+                    if w:
+                        row['suggested_scale'] = round(row['scale_applied'] * stored / w, 3)
+                rows.append(row)
+                Image.fromarray(img).save(out / ('%s.png' % name))
+                t = Image.fromarray(img).convert('RGB').resize((160, 160))
+                d = ImageDraw.Draw(t)
+                if mb:
+                    d.rectangle([v * 160 / size for v in mb], outline=(0, 255, 0))
+                d.rectangle([v * 160 / size for v in pb], outline=(255, 0, 255))
+                d.rectangle([0, 0, 159, 12], fill=(0, 0, 0))
+                d.text((2, 0), name[:24], fill=(255, 255, 255))
+                thumbs.append(t)
+                print('  %-16s IoU %-5s span %.2f %s' % (name, iou, row['span'],
+                      ('FLAGGED, suggested scale %s' % row.get('suggested_scale')) if row['flagged'] else ''), flush=True)
+        finally:
+            scene.close()
+    (out / 'object_check.json').write_text(json.dumps(rows, indent=1) + '\n')
+    cols = 12
+    sheet = Image.new('RGB', (cols * 160, math.ceil(len(thumbs) / cols) * 160))
+    for i, t in enumerate(thumbs):
+        sheet.paste(t, ((i % cols) * 160, (i // cols) * 160))
+    sheet.save(out / 'contact_sheet.jpg', quality=88)
+    flagged = [r['object'] for r in rows if r['flagged']]
+    print('%d objects checked, %d flagged: %s -> %s' % (len(rows), len(flagged), ', '.join(flagged) or 'none', out))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -657,7 +738,7 @@ def main():
     cal.add_argument('--framing-radius', type=float, default=120,
                      help='light radius while choosing the framing (covers the largest object)')
     cal.add_argument('--radii', type=float, nargs='+', default=[50, 70, 90, 120, 160, 220])
-    cal.add_argument('--device', default='cuda:0', help='GPU for YOLO; Unreal renders on GPU 3')
+    cal.add_argument('--device', default='cuda:0', help='YOLO11m device; pin the GPU with CUDA_VISIBLE_DEVICES')
     sub.add_parser('map', help='draw captures/room_map.png from scene_config.json and the level')
     sw = sub.add_parser('sweep', help='score a grid of light positions for every object (YOLO9000)')
     sw.add_argument('--camera-height', type=float, default=None, help='default: scene_config.json')
@@ -667,7 +748,13 @@ def main():
     sw.add_argument('--out', required=True, help='output folder, e.g. captures/sweep_2026-10-06')
     sw.add_argument('--device', default='cuda:0', help='YOLO11m device; pin the GPU with CUDA_VISIBLE_DEVICES')
     sw.add_argument('--rescore', action='store_true', help='re-score the saved frames (no Unreal needed)')
+    ck = sub.add_parser('check-objects', help='render each object once; flag models whose drawn size != bounds')
+    ck.add_argument('--objects', nargs='+', default=None, help='default: every object in object_classes.json')
+    ck.add_argument('--out', default=str(REPO / 'captures' / 'object_check'))
     args = ap.parse_args()
+    if args.cmd == 'check-objects':
+        check_objects(args)
+        return
     if args.cmd == 'calibrate':
         calibrate(args)
     elif args.cmd == 'sweep':

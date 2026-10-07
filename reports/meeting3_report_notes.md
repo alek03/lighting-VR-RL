@@ -369,6 +369,43 @@ labelled), and the average lighting map. Its colour scale runs from 0 to just ab
 position (25% accuracy, 0.15 confidence), shown on the colour bars, because averages over 107
 objects span a narrow range.
 
+## Why YOLO9000 performs poorly here (technical)
+
+1. **Localisation learned from 80 classes only.** YOLO9000 (Redmon & Farhadi, CVPR 2017) trains
+   jointly on COCO detection (boxes; full loss: coordinates, objectness, class) and ImageNet
+   classification (~9,000 classes, no boxes; classification loss only, at the anchor that predicts
+   the class most strongly). Box regression and objectness are therefore learned only for COCO's 80
+   categories; for other classes it only learns to name regions it already considers objects. The
+   paper reports 16.0 mAP on the 156 ImageNet-detection classes without COCO boxes, and near zero
+   on clothing and equipment. Ours: 28% of frames (1,796) have no box above objectness 0.25; boxes
+   land on COCO-like structures ("bench" on the lit table, "traffic light" on bright spots); box-
+   trained classes average 38% accuracy vs 3% photo-only; clothing items (Apron, Mitten, Sock,
+   BowTie, Sunglasses) score 0%.
+2. **Hierarchical softmax dilutes confidence.** Classes form a WordTree of 9,418 WordNet nodes; the
+   network predicts a softmax over each node's children (conditional probabilities), and a class's
+   probability is the product along its 10–15-level path. Specific classes get small
+   probabilities (median top-answer confidence 0.20, half below), siblings split the mass (Mug:
+   teacup 0.33 vs coffee cup 0.21; BeerGlass → "Dixie cup"), and Darknet stops at general nodes
+   when unsure ("ball", "artifact").
+3. **Coarse, dated architecture.** `cfg/yolo9000.cfg`: Darknet-19 backbone, 544×544 input, a
+   single 17×17 output grid (stride 32), 3 anchors per cell, no passthrough layer (unlike YOLOv2),
+   and a final 1×1 conv to 28,269 channels (3 × (9,418 + 5)). No multi-scale heads or modern
+   training recipe. On the 31 shared objects YOLO11m averages 0.39 confidence vs 0.22.
+4. **Domain shift.** Training data are natural photos; ours are synthetic renders with simple
+   (often texture-poor) materials, a single spotlight, emissive 0, hard shadows and dark
+   backgrounds, one object on a table. ImageNet CNNs rely on texture (Geirhos et al., 2019), so the
+   model falls back on outline and brightness: "traffic light" for bright blobs, "book" for flat
+   rectangles, "Frisbee"/"toilet seat" for discs. Accuracy rises with camera-facing, lit surfaces
+   (5° high 10% → 45° high 16.5%; behind/left 5–8% → front-right 45° high 24%).
+5. **Strict scoring by design:** one top answer per frame, accepted class or more specific, box on
+   the object; near misses among 9,000 fine-grained classes count as wrong (Lemon → "tennis ball",
+   Basketball → "medicine ball"). Relaxing rules changes individual objects but ~79 stay
+   unrecognised under every rule tried.
+
+In short: it can name ~9,000 classes but learned to find only 80, its tree softmax spreads
+confidence thin, its single coarse output scale is dated, and our dark synthetic renders are far
+from its training photos. A modern open-vocabulary detector addresses the first three directly.
+
 ## Setup for the sweep (2026-10-06)
 
 - **Frozen project copy:** `/opt/Unrealprojects/tufaelz_frozen_2026-10-06` (Content, Config,
