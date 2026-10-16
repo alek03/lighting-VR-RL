@@ -1,3 +1,35 @@
+# YOLOE-26n (default scorer)
+
+`YoloE26n` in `training/vision.py` loads `models/yoloe-26n-seg.pt` through Ultralytics.
+Install/update dependencies with `.venv/bin/pip install -U -r requirements.txt`.
+YOLOE-26 requires Ultralytics >=8.4.0. The first run downloads weights and the text
+encoder and may install Ultralytics CLIP; network access is needed for this setup.
+See the [official YOLOE documentation](https://docs.ultralytics.com/models/yoloe/).
+
+```python
+from training.vision import YoloE26n
+scorer = YoloE26n(device='cuda:0')  # 'cpu' is also supported
+result = scorer.score('frame.png', 'Mug', mask=object_mask)
+```
+
+`yoloe_labels()` turns the complete object catalogue into readable text labels, with
+explicit overrides for cell phone, potted plant and computer keyboard. All labels are
+set once, regardless of `--objects` or the ground-truth object being evaluated. The
+silhouette is used for scoring only, never as a prompt. Paths, PIL images and RGB
+NumPy arrays are supported. Captures are not cropped to the object.
+
+- `confidence`: maximum returned detection confidence for the expected label, or zero.
+- `top3`: up to three distinct detected labels ranked by each label's best box confidence;
+  these are not three alternative class probabilities for one box.
+- `top_box`: highest-confidence detection in the full image. The existing mask overlap
+  rule determines whether it lies on the object. An empty supplied mask cannot yield correct.
+- Verdicts: `correct`, `wrong`, or `none` (below detection threshold). No WordNet `partial`.
+- `top1_wnid` and `objectness` are blank: YOLOE does not expose these Darknet quantities.
+
+The segmentation checkpoint supplies the detections; Unreal's independent mask remains
+the ground truth. YOLO11m remains the auxiliary COCO scorer and calibration model.
+YOLO9000 is retained via `--model yolo9000`; its legacy API is documented below.
+
 # `training/vision.py`
 
 The vision models that judge each frame. Pin the GPU with

@@ -3,6 +3,8 @@
 `Scorer` is stock YOLO11m, trained on COCO, which has no class for two of the ten original table
 objects (Shoe, Lamp); `score` returns None for those.
 
+`YoloE26n` is the default: YOLOE-26n with fixed catalogue text prompts.
+
 `Yolo9000` is YOLO9000 (Darknet), whose ~9,000 classes form a WordNet tree; which classes count
 as correct for each object is in training/object_classes.json.
 """
@@ -191,3 +193,105 @@ class Yolo9000:
             verdict = 'wrong'
         result['verdict'] = verdict
         return result
+
+
+def yoloe_labels():
+    """Fixed catalogue vocabulary, independent of which object is currently being scored."""
+    import re
+    overrides = {'Phone': 'cell phone', 'Plant': 'potted plant',
+                 'Keyboard': 'computer keyboard', 'ReflexCamera': 'reflex camera'}
+    return {o['object']: overrides.get(o['object'], re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', o['object']).lower())
+            for o in json.loads(OBJECT_CLASSES.read_text())['objects']}
+
+
+class YoloE26n:
+    """YOLOE-26n with a fixed text vocabulary and the sweep scorer interface.
+
+    Confidence is the highest returned detection score for the expected label anywhere in
+    the frame. top3 contains distinct detected labels ranked by their best detection score,
+    not alternative probabilities for a single box. No WordNet partial verdict is available.
+    Unreal's object mask is used only for evaluation, never as an inference prompt.
+    """
+    def __init__(self, weights='yoloe-26n-seg.pt', device='cuda:0', detect_thresh=0.25,
+                 conf=0.001, max_boxes=300):
+        from ultralytics import YOLOE
+        if not 0 < conf <= detect_thresh <= 1:
+            raise ValueError('require 0 < conf <= detect_thresh <= 1')
+        self.labels = yoloe_labels()
+        self.names = list(dict.fromkeys(self.labels.values()))
+        self.device, self.detect_thresh = device, detect_thresh
+        self.conf, self.max_boxes = conf, max_boxes
+        MODELS.mkdir(exist_ok=True)
+        self.model = YOLOE(str(MODELS / weights))
+        self.model.to(device)
+        self.model.set_classes(self.names)
+
+    def boxes(self, image):
+        """Return detections in original-image coordinates, sorted by confidence.
+
+        Paths and PIL images are accepted; NumPy input is RGB, as returned by Scene.capture.
+        """
+        if isinstance(image, np.ndarray):
+            image = np.ascontiguousarray(image[..., ::-1])  # Ultralytics expects BGR arrays.
+        if isinstance(image, Path):
+            image = str(image)
+        prediction = self.model.predict(image, device=self.device, conf=self.conf,
+                                        max_det=self.max_boxes, verbose=False)[0]
+        if prediction.boxes is None:
+            return []
+        boxes = prediction.boxes.cpu().numpy()
+        return sorted([{'box': [float(v) for v in xyxy], 'class': self.names[int(cls)],
+                        'confidence': float(conf)}
+                       for xyxy, cls, conf in zip(boxes.xyxy, boxes.cls, boxes.conf)],
+                      key=lambda b: -b['confidence'])
+
+    def score(self, image, object_name, mask=None, on_object=0.5):
+        label = self.labels[object_name]
+        boxes = self.boxes(image)
+        result = {'object': object_name, 'accepted': [label],
+                  'confidence': max((b['confidence'] for b in boxes if b['class'] == label), default=0.0),
+                  'verdict': 'none', 'top3': [], 'top_box': None}
+        truth = None
+        if mask is not None:
+            mask = np.asarray(mask, dtype=bool)
+            if mask.ndim != 2:
+                raise ValueError('mask must be a 2D object silhouette')
+            ys, xs = np.nonzero(mask)
+            if len(xs):
+                truth = [float(xs.min()), float(ys.min()), float(xs.max() + 1), float(ys.max() + 1)]
+                result['truth_box'] = truth
+        if not boxes or boxes[0]['confidence'] < self.detect_thresh:
+            return result
+        top = boxes[0]
+        seen = set()
+        for box in boxes:
+            if box['class'] not in seen and box['confidence'] >= self.detect_thresh:
+                result['top3'].append({'class': box['class'], 'confidence': round(box['confidence'], 4)})
+                seen.add(box['class'])
+                if len(seen) == 3:
+                    break
+        result['top_box'] = {'box': [round(v, 1) for v in top['box']]}
+        is_on = mask is None
+        if truth is not None:
+            h, w = mask.shape
+            x0, y0, x1, y1 = (int(round(v)) for v in top['box'])
+            inside = float(mask[max(0, min(h, y0)):max(0, min(h, y1)),
+                                max(0, min(w, x0)):max(0, min(w, x1))].sum())
+            metrics = {'iou': box_overlap(top['box'], truth)['iou'],
+                       'object_fraction': inside / max(1, (x1 - x0) * (y1 - y0)),
+                       'coverage': inside / mask.sum(),
+                       'centre_in_box': int(x0 <= (truth[0] + truth[2]) / 2 <= x1 and
+                                            y0 <= (truth[1] + truth[3]) / 2 <= y1)}
+            result['top_box'].update({k: round(float(v), 3) for k, v in metrics.items()})
+            is_on = max(metrics['iou'], metrics['object_fraction']) >= on_object
+        result['verdict'] = 'correct' if is_on and top['class'] == label else 'wrong'
+        return result
+
+
+def make_scorer(model='yoloe26n', device='cuda:0'):
+    """Construct the primary sweep scorer; Darknet is imported only when explicitly selected."""
+    if model == 'yoloe26n':
+        return YoloE26n(device=device)
+    if model == 'yolo9000':
+        return Yolo9000()
+    raise ValueError('unknown vision model: ' + model)

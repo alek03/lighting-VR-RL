@@ -1,4 +1,4 @@
-"""Scene geometry for the flashlight task, and calibration of camera framing and light radius.
+"""Scene geometry for the flashlight task, and calibration of settle time and light radius.
 
 Coordinates are Unreal world centimetres (left-handed, Z up). Light angles are relative to the
 camera, so they mean the same thing whatever the table's orientation:
@@ -7,11 +7,8 @@ camera, so they mean the same thing whatever the table's orientation:
               180 = behind the object
     elevation 0 = level with the object's centre, 90 = directly above it
 
-The camera stays at the horizontal position recorded in the project's Scripts/pose.json (its
-height is configurable: that recording is at seated eye height), is aimed at the object, and zooms
-so the object's bounding sphere fills a fixed fraction of the frame. Per-object zoom keeps the
-reward about lighting rather than object size: one field of view for all ten objects either
-crops the 91 cm chair or leaves the 1.6 cm-thick phone a few pixels tall.
+The camera uses the recorded position, rotation and field of view from Scripts/pose.json
+unchanged for every object. Object size never changes camera framing.
 
     .venv/bin/python -m training.scene calibrate   # also rewrites calibration.md and the room map
     .venv/bin/python -m training.scene map         # redraw captures/room_map.png only
@@ -51,15 +48,9 @@ def look_at(src, dst):
     return [pitch, yaw, 0.0]
 
 
-def camera_pose(target, object_radius, fill, height=None):
-    """Camera at the pose.json position (optionally at another height), aimed at the target and
-    zoomed so a sphere of `object_radius` spans `fill` of the frame width."""
-    loc = np.array(json.loads(POSE.read_text())['camera']['location'], float)
-    if height is not None:
-        loc[2] = height
-    distance = np.linalg.norm(loc - np.asarray(target, float))
-    fov = math.degrees(2 * math.atan(object_radius / (fill * distance)))
-    return {'location': loc.tolist(), 'rotation': look_at(loc, target), 'fov': fov}
+def camera_pose():
+    """Load the recorded camera without re-aiming, moving or changing its field of view."""
+    return json.loads(POSE.read_text())['camera']
 
 
 def light_position(centre, camera_location, azimuth, elevation, radius):
@@ -101,18 +92,19 @@ def mask_box(mask):
 class Scene:
     """One object on the table, the fixed camera, and the flashlight."""
 
-    def __init__(self, ue, width=640, height=640, world='editor', camera_height=None, fill=0.6,
-                 supersample=2):
+    def __init__(self, ue, width=640, height=640, world='editor', supersample=2):
         self.ue, self.width, self.height, self.world = ue, width, height, world
         # Scene captures get no anti-aliasing here, so render larger and downsample instead.
         self.supersample = supersample
-        self.camera_height, self.fill = camera_height, fill
         self.info = ue.call('describe', world=world, nearby_cm=900)
         self.sizes = {n: v['radius_cm'] for n, v in self.info['objects'].items()}
         self.torch = self.info['torch_light']
         self.tmp = Path(tempfile.mkdtemp(prefix='vrnav_', dir='/dev/shm'))
-        self.name = self.centre = self.camera = None
+        self.name = self.centre = None
+        self.camera = camera_pose()
         ue.call('light_setup', world=world)
+        self.ue.call('capture_setup', world=self.world, camera=self.camera,
+                     width=self.width * self.supersample, height=self.height * self.supersample)
 
     def close(self):
         for call in ('light_cleanup', 'capture_cleanup'):
@@ -123,20 +115,13 @@ class Scene:
         self.tmp.rmdir()
 
     def load(self, name):
-        """Put `name` on the table (scaled if its model needs it, see object_scale.json) and frame it.
+        """Put `name` on the table (scaled if its model needs it, see object_scale.json) without changing the camera.
         The centre is taken before scaling: it is where the realistic-size object sits."""
         self.name = name
         self.centre = self.ue.call('spawn', object=name, world=self.world)['object_bounds_center_cm']
         if name in OBJECT_SCALE:
             self.ue.call('scale_object', scale=OBJECT_SCALE[name], world=self.world)
-        self.aim_camera()
         return self.centre
-
-    def aim_camera(self, fill=None):
-        self.fill = fill or self.fill
-        self.camera = camera_pose(self.centre, self.sizes[self.name], self.fill, self.camera_height)
-        self.ue.call('capture_setup', world=self.world, camera=self.camera,
-                     width=self.width * self.supersample, height=self.height * self.supersample)
 
     def light(self, azimuth, elevation, radius):
         loc = light_position(self.centre, self.camera['location'], azimuth, elevation, radius)
@@ -218,14 +203,13 @@ def sweep(scene, scorer, settings, configure, settle, sheet_name, caption):
         results[name], cells = {}, []
         for setting in settings:
             radius = configure(setting)
-            half = max(8, int(scene.fill * scene.width / 2))
-            cy, cx = scene.height // 2, scene.width // 2
+            mask = scene.capture_mask()
             confs, bright, clipped = [], [], []
             for az, el in CAL_DIRECTIONS:
                 scene.light(az, el, radius)
                 img = scene.capture(settle)
                 confs.append(scorer.score(img, name))
-                patch = img[cy - half:cy + half, cx - half:cx + half].mean(axis=2)
+                patch = img[mask].mean(axis=1) if mask.any() else np.array([0.0])
                 bright.append(patch.mean())
                 clipped.append((patch >= 250).mean())
                 if (az, el) == CAL_DIRECTIONS[1]:
@@ -261,7 +245,7 @@ SWEEP_ELEVATIONS = [5, 25, 45, 65, 85]
 
 
 def draw_map(info, config, path):
-    """Top and side view of the room with the configured camera, zoom range and light sphere."""
+    """Top and side view of the room with the recorded camera and light sphere."""
     from PIL import ImageDraw, ImageFont
     fonts = '/usr/share/fonts/truetype/dejavu/DejaVuSans%s.ttf'
     font, bold = ImageFont.truetype(fonts % '', 13), ImageFont.truetype(fonts % '-Bold', 15)
@@ -274,10 +258,11 @@ def draw_map(info, config, path):
     floor_lo, floor_hi = bounds(next(v for k, v in near.items() if 'Floor' in k))
     table_lo, table_hi = bounds(next(v for k, v in near.items() if 'Table' in k))
     table = info['table_centre_cm']
-    cam_cfg, light_cfg = config['camera'], config['light']
+    light_cfg = config['light']
     radius = light_cfg['radius_cm']
     el_lo, el_hi = light_cfg['elevation_range_deg']
-    cam = camera_pose(table, 1, 1, cam_cfg['height_cm'])['location']
+    pose = camera_pose()
+    cam = pose['location']
     obj_z = table_hi[2] + info['objects']['Mug']['size_cm'][2] / 2
     obj = [table[0], table[1], obj_z]
 
@@ -307,7 +292,7 @@ def draw_map(info, config, path):
         d.ellipse([x - r, y - r, x + r, y + r], fill=colour)
 
     grey, dark, wood = (205, 205, 200), (90, 90, 90), (160, 110, 60)
-    blue, pale_blue, amber = (40, 90, 200), (150, 180, 235), (220, 140, 10)
+    blue, amber = (40, 90, 200), (220, 140, 10)
 
     rect(dt, tp, floor_lo[:2], floor_hi[:2], outline=dark, width=2)
     rect(ds, sp, (floor_lo[0], floor_lo[2]), (floor_hi[0], floor_hi[2]), fill=grey)
@@ -320,20 +305,13 @@ def draw_map(info, config, path):
         if 'Roof' in k or ('Wall' in k and n['half_size'][0] < 60):
             rect(ds, sp, (lo[0], lo[2]), (hi[0], hi[2]), fill=grey)
 
-    # Zoom range: the narrowest and widest per-object fields of view.
-    fovs = {}
-    for name, o in info['objects'].items():
-        centre = [table[0], table[1], table_hi[2] + o['size_cm'][2] / 2]
-        fovs[name] = camera_pose(centre, o['radius_cm'], cam_cfg['fill'], cam_cfg['height_cm'])
-    narrow, wide = min(fovs, key=lambda n: fovs[n]['fov']), max(fovs, key=lambda n: fovs[n]['fov'])
-    for name, shade in ((wide, pale_blue), (narrow, blue)):
-        pose = fovs[name]
-        pitch, yaw = math.radians(pose['rotation'][0]), math.radians(pose['rotation'][1])
-        half = math.radians(pose['fov'] / 2)
-        for sign in (-1, 1):
-            a, b = yaw + sign * half, pitch + sign * half
-            dt.line([tp(*cam[:2]), tp(cam[0] + 400 * math.cos(a), cam[1] + 400 * math.sin(a))], fill=shade, width=2)
-            ds.line([sp(cam[0], cam[2]), sp(cam[0] + 300 * math.cos(b), cam[2] + 300 * math.sin(b))], fill=shade, width=2)
+    # One recorded field of view for every object.
+    pitch, yaw = math.radians(pose['rotation'][0]), math.radians(pose['rotation'][1])
+    half = math.radians(pose['fov'] / 2)
+    for sign in (-1, 1):
+        a, b = yaw + sign * half, pitch + sign * half
+        dt.line([tp(*cam[:2]), tp(cam[0] + 400 * math.cos(a), cam[1] + 400 * math.sin(a))], fill=blue, width=2)
+        ds.line([sp(cam[0], cam[2]), sp(cam[0] + 300 * math.cos(b), cam[2] + 300 * math.sin(b))], fill=blue, width=2)
 
     rect(dt, tp, table_lo[:2], table_hi[:2], fill=wood)
     rect(ds, sp, (table_lo[0], table_hi[2] - 6), (table_hi[0], table_hi[2]), fill=wood)
@@ -367,8 +345,7 @@ def draw_map(info, config, path):
     legend = [
         ('camera', blue, 'height %.0f cm, %.0f cm from the table (pose.json position)'
          % (cam[2], math.dist(cam[:2], table[:2]))),
-        ('zoom', blue, 'object fills %.0f%% of the frame: %.0f° (%s) to %.0f° (%s)'
-         % (100 * cam_cfg['fill'], fovs[narrow]['fov'], narrow, fovs[wide]['fov'], wide)),
+        ('FOV', blue, 'fixed %.1f degrees from pose.json for every object' % pose['fov']),
         ('light', amber, 'sphere radius %.0f cm, elevation %d-%d° above the object centre'
          % (radius, el_lo, el_hi)),
         ('dots', amber, 'light positions tested: %d directions x %d heights (%s°) = %d'
@@ -393,7 +370,7 @@ def draw_map(info, config, path):
 
 def write_report(report, config, path):
     """Markdown tables of every calibration measurement, with the chosen settings marked."""
-    fill, radius = config['camera']['fill'], config['light']['radius_cm']
+    radius = config['light']['radius_cm']
     dirs = ', '.join('(%d°, %d°)' % d for d in CAL_DIRECTIONS)
 
     def table(results, chosen, fmt, extra=None):
@@ -424,9 +401,9 @@ def write_report(report, config, path):
         '',
         '**Method.** Each cell is the mean YOLO11m confidence for the object\'s own COCO class, '
         'over the light directions (azimuth, elevation) %s. Frames are %dx%d, rendered at %dx '
-        'and downsampled. Camera at %s cm height, pose from `%s`. "–" = no COCO class (Shoe, Lamp).'
+        'and downsampled. Camera position, rotation and FOV unchanged from `%s`. "–" = no COCO class (Shoe, Lamp).'
         % (dirs, config['camera']['width'], config['camera']['height'],
-           config['render'].get('supersample', 2), config['camera']['height_cm'] or 'pose.json',
+           config['render'].get('supersample', 2),
            Path(config['camera']['pose_file']).name),
         '',
         '## Settle time',
@@ -439,19 +416,12 @@ def write_report(report, config, path):
         '|' + '---|' * (len(settle['diff_by_frames']) + 1),
         '| Difference | ' + ' | '.join('%.3f' % v for v in settle['diff_by_frames'].values()) + ' |',
         '',
-        '## Framing: fraction of the frame the object fills',
-        '',
-        'Light at %s cm. Mean over objects: %s. Rule: best mean; within 0.02 counts as a tie, '
-        'broken toward the larger fill.' % (report.get('framing_radius', '120'), report['fill_mean_conf']),
-        '',
-        table(report['framing'], fill, '%.2f'),
-        '',
         '## Light radius',
         '',
-        'At fill %.2f. Cells: confidence (object brightness 0-255). Mean over objects: %s. Rule: only '
+        'With the recorded camera. Cells: confidence (object brightness 0-255). Mean over objects: %s. Rule: only '
         'radii where the torch\'s full-intensity cone covers every scorable object (>= %.0f cm, the '
         'chair); best mean, ties toward the closer, brighter radius.'
-        % (fill, report['radius_mean_conf'], report.get('radius_needed_cm', 0)),
+        % (report['radius_mean_conf'], report.get('radius_needed_cm', 0)),
         '',
         table(report['radius'], radius, '%.0f cm', extra=lambda v: ' (%.0f)' % v['brightness']),
         '',
@@ -475,7 +445,7 @@ def calibrate(args):
     scorer = Scorer(device=args.device)
     started = time.time()
     with UnrealClient(timeout=300) as ue:
-        scene = Scene(ue, args.size, args.size, args.world, args.camera_height)
+        scene = Scene(ue, args.size, args.size, args.world)
         inner = float(scene.torch['inner_cone_angle'])
         # The torch's full-intensity cone covers an object only beyond this distance.
         min_radius = {n: round(scene.sizes[n] / math.tan(math.radians(inner)), 1) for n in scene.sizes}
@@ -486,15 +456,7 @@ def calibrate(args):
             print('  ', settle, flush=True)
             s = settle['settle_frames']
 
-            print('framing (fraction of frame the object fills)...', flush=True)
-            framing = sweep(scene, scorer, args.fills,
-                            lambda f: (scene.aim_camera(f), args.framing_radius)[1],
-                            s, 'framing.jpg', 'fill %.2f')
-            # On a tie, frame larger: more pixels on the object shows more lighting detail.
-            fill, fill_means = _best(framing, prefer=max)
-
-            print('light radius at fill %.2f...' % fill, flush=True)
-            scene.fill = fill
+            print('light radius with fixed camera...', flush=True)
             radii = sweep(scene, scorer, args.radii, lambda r: r, s, 'radius.jpg', '%d cm')
             # Only radii at which the torch's full-intensity cone covers every scorable object;
             # on a tie, the closest (brightest) one.
@@ -503,7 +465,7 @@ def calibrate(args):
         finally:
             scene.close()
     config = {
-        'camera': {'pose_file': str(POSE), 'height_cm': args.camera_height, 'fill': fill,
+        'camera': {'pose_file': str(POSE),
                    'width': args.size, 'height': args.size},
         'light': {'radius_cm': radius, 'min_radius_cm_by_object': min_radius,
                   'elevation_range_deg': [5, 85], 'settings_from': 'BP_Torch'},
@@ -511,14 +473,13 @@ def calibrate(args):
         'vision': {'weights': 'yolo11m.pt'},
     }
     CONFIG.write_text(json.dumps(config, indent=2) + '\n')
-    report = {'settle': settle, 'fill_mean_conf': fill_means, 'radius_mean_conf': radius_means,
-              'framing_radius': args.framing_radius, 'radius_needed_cm': needed,
-              'framing': framing, 'radius': radii, 'seconds': round(time.time() - started)}
+    report = {'settle': settle, 'radius_mean_conf': radius_means,
+              'radius_needed_cm': needed, 'radius': radii, 'seconds': round(time.time() - started)}
     (REPO / 'logs').mkdir(exist_ok=True)
     (REPO / 'logs' / 'calibration.json').write_text(json.dumps(report, indent=2) + '\n')
     write_report(report, config, REPO / 'training' / 'calibration.md')
     draw_map(scene.info, config, MAP)
-    print(json.dumps({'chosen': config, 'fill_mean_conf': fill_means,
+    print(json.dumps({'chosen': config,
                       'radius_mean_conf': radius_means}, indent=2))
 
 
@@ -530,9 +491,9 @@ SWEEP_FIELDS = ['object', 'id', 'elevation', 'azimuth', 'light_x', 'light_y', 'l
                 'truth_x0', 'truth_y0', 'truth_x1', 'truth_y1', 'yolo11m_confidence']
 
 
-def frame_row(yolo9000, path, name, mask, base):
-    """One sweep row: `base` (object, position, light, YOLO11m) plus YOLO9000's result for the frame."""
-    r = yolo9000.score(path, name, mask=mask)
+def frame_row(scorer, path, name, mask, base):
+    """One sweep row: `base` (object, position, light, YOLO11m) plus the primary scorer's result for the frame."""
+    r = scorer.score(path, name, mask=mask)
     row = dict(base, accepted='; '.join(r['accepted']), verdict=r['verdict'], confidence=round(r['confidence'], 4))
     top = r['top3'] + [{}] * (3 - len(r['top3']))
     for i, t in enumerate(top, 1):
@@ -556,8 +517,8 @@ def _progress(k, total, name, rows, started):
 
 
 def sweep_sphere(args):
-    """Score every light position on an azimuth x elevation grid for every object, with YOLO9000
-    (and YOLO11m where the object has a COCO class), using the calibrated camera and radius.
+    """Score every light position on an azimuth x elevation grid for every object, with YOLOE-26n by default
+    (and YOLO11m where the object has a COCO class), using the recorded camera and calibrated light radius.
 
     Writes <out>/sweep.csv (one row per object x light position), <out>/frames/<Object>/*.png
     and each object's mask. Objects already complete in the CSV are skipped, so an interrupted
@@ -568,14 +529,16 @@ def sweep_sphere(args):
     object_classes.json or the box rule), keeping each row's light position and YOLO11m score.
     The previous table is kept as sweep_before_rescore.csv."""
     import csv
-    from training.vision import COCO_CLASS, Scorer, Yolo9000
+    from training.vision import COCO_CLASS, Scorer, make_scorer
     out = Path(args.out)
     table = out / 'sweep.csv'
+    model_file = out / 'vision_model.json'
+    model_info = {'model': args.model}
     if args.rescore:
         old = list(csv.DictReader(table.open()))
         backup = out / 'sweep_before_rescore.csv'
+        scorer, started = make_scorer(args.model, args.device), time.time()
         table.replace(backup)
-        yolo9000, started = Yolo9000(), time.time()
         names = list(dict.fromkeys(r['object'] for r in old))
         with table.open('w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=SWEEP_FIELDS)
@@ -586,13 +549,17 @@ def sweep_sphere(args):
                 for r in (r for r in old if r['object'] == name):
                     base = {key: r[key] for key in ('object', 'id', 'elevation', 'azimuth', 'light_x', 'light_y',
                                                     'light_z', 'frame', 'yolo11m_confidence')}
-                    rows.append(frame_row(yolo9000, out / r['frame'], name, mask, base))
+                    rows.append(frame_row(scorer, out / r['frame'], name, mask, base))
                 writer.writerows(rows); f.flush()
                 _progress(k, len(names), name, rows, started)
+        model_file.write_text(json.dumps(model_info, indent=2) + '\n')
         print('wrote', table, '(previous table: %s)' % backup)
         return
+    if table.exists():
+        previous = json.loads(model_file.read_text())['model'] if model_file.exists() else 'yolo9000'
+        if previous != args.model:
+            raise ValueError('Output folder contains %s scores; use a new --out folder or --rescore.' % previous)
     cfg = json.loads(CONFIG.read_text())
-    height = args.camera_height if args.camera_height is not None else cfg['camera']['height_cm']
     radius, settle = cfg['light']['radius_cm'], cfg['render']['settle_frames']
     azimuths = list(range(0, 360, args.az_step))
     catalogue = {o['object']: o for o in json.loads((REPO / 'training' / 'object_classes.json').read_text())['objects']}
@@ -611,7 +578,8 @@ def sweep_sphere(args):
         done = {k: n for k, n in done.items() if n == per_object}
     todo = [n for n in names if n not in done]
     print('%d objects, %d already done, %d to go' % (len(names), len(names) - len(todo), len(todo)), flush=True)
-    yolo9000, yolo11m = Yolo9000(), Scorer(device=args.device)
+    scorer, yolo11m = make_scorer(args.model, args.device), Scorer(device=args.device)
+    model_file.write_text(json.dumps(model_info, indent=2) + '\n')
     new_file = not table.exists()
     started = time.time()
     with UnrealClient(timeout=300) as ue, table.open('a', newline='') as f:
@@ -619,7 +587,7 @@ def sweep_sphere(args):
         if new_file:
             writer.writeheader()
         scene = Scene(ue, cfg['camera']['width'], cfg['camera']['height'], cfg['render']['world'],
-                      height, cfg['camera']['fill'], cfg['render'].get('supersample', 2))
+                      supersample=cfg['render'].get('supersample', 2))
         try:
             for k, name in enumerate(todo):
                 scene.load(name)
@@ -639,7 +607,7 @@ def sweep_sphere(args):
                                 'light_x': round(light[0], 1), 'light_y': round(light[1], 1), 'light_z': round(light[2], 1),
                                 'frame': str(path.relative_to(out)),
                                 'yolo11m_confidence': '' if COCO_CLASS.get(name) is None else round(yolo11m.score(img, name), 4)}
-                        rows.append(frame_row(yolo9000, path, name, mask, base))
+                        rows.append(frame_row(scorer, path, name, mask, base))
                 writer.writerows(rows); f.flush()
                 _progress(k, len(todo), name, rows, started)
         finally:
@@ -648,12 +616,11 @@ def sweep_sphere(args):
 
 
 def check_objects(args):
-    """Render every object once with the calibrated camera and capture its mask, to catch models
+    """Render every object once with the recorded camera and capture its mask, to catch models
     whose drawn size does not match their stored bounds (as found in the Oct 5 project update).
 
     Flags an object if its silhouette overflows the frame, is missing, or overlaps its projected
-    3D bounds box with IoU < 0.4; for flagged objects it measures the drawn width in cm (zooming
-    out until the object fits) and suggests a scale factor for object_scale.json. Writes
+    3D bounds box with IoU < 0.4. The camera stays unchanged, including for clipped objects. Writes
     <out>/object_check.json, <out>/contact_sheet.jpg (green = silhouette box, magenta = bounds)
     and one frame per object. Objects already in object_scale.json are placed scaled."""
     from PIL import ImageDraw
@@ -665,22 +632,10 @@ def check_objects(args):
     out.mkdir(parents=True, exist_ok=True)
     size = cfg['camera']['width']
 
-    def drawn_width(scene):
-        """Drawn width across the camera (cm), zooming out until the silhouette fits."""
-        for fill in (0.5, 0.25, 0.12, 0.06, 0.03, 0.015):
-            scene.aim_camera(fill)
-            scene.light(0, 30, cfg['light']['radius_cm'])
-            scene.capture(2)
-            mb = mask_box(scene.capture_mask())
-            if mb and min(mb[:2]) > 1 and max(mb[2:]) < size - 1:
-                cm_px = 2 * math.dist(scene.camera['location'], scene.centre) * math.tan(math.radians(scene.camera['fov'] / 2)) / size
-                return (mb[2] - mb[0]) * cm_px
-        return None
-
     rows, thumbs = [], []
     with UnrealClient(timeout=300) as ue:
-        scene = Scene(ue, size, size, cfg['render']['world'], cfg['camera']['height_cm'], cfg['camera']['fill'],
-                      cfg['render'].get('supersample', 2))
+        scene = Scene(ue, size, size, cfg['render']['world'],
+                      supersample=cfg['render'].get('supersample', 2))
         try:
             for name in names:
                 scene.load(name)
@@ -695,13 +650,6 @@ def check_objects(args):
                        'span': round(max(mb[2] - mb[0], mb[3] - mb[1]) / size, 3) if mb else 0.0,
                        'brightness': round(float(img[mask].mean()), 1) if mask.any() else None}
                 row['flagged'] = bool(row['missing'] or edge or iou < 0.4)
-                if row['flagged']:
-                    stored = scene.info['objects'][name]['size_cm'][1]       # across the camera, which looks along +X
-                    w = drawn_width(scene)
-                    row['stored_width_cm'] = stored
-                    row['drawn_width_cm'] = round(w, 1) if w else None
-                    if w:
-                        row['suggested_scale'] = round(row['scale_applied'] * stored / w, 3)
                 rows.append(row)
                 Image.fromarray(img).save(out / ('%s.png' % name))
                 t = Image.fromarray(img).convert('RGB').resize((160, 160))
@@ -713,7 +661,7 @@ def check_objects(args):
                 d.text((2, 0), name[:24], fill=(255, 255, 255))
                 thumbs.append(t)
                 print('  %-16s IoU %-5s span %.2f %s' % (name, iou, row['span'],
-                      ('FLAGGED, suggested scale %s' % row.get('suggested_scale')) if row['flagged'] else ''), flush=True)
+                      'FLAGGED' if row['flagged'] else ''), flush=True)
         finally:
             scene.close()
     (out / 'object_check.json').write_text(json.dumps(rows, indent=1) + '\n')
@@ -729,24 +677,20 @@ def check_objects(args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
-    cal = sub.add_parser('calibrate', help='measure settle time, pick framing and light radius')
+    cal = sub.add_parser('calibrate', help='measure settle time and pick light radius with the recorded camera')
     cal.add_argument('--world', default='editor', choices=['editor', 'pie'])
     cal.add_argument('--size', type=int, default=640, help='square render size (YOLO native)')
-    cal.add_argument('--camera-height', type=float, default=None,
-                     help='camera height in cm (default: pose.json, recorded at seated eye height)')
-    cal.add_argument('--fills', type=float, nargs='+', default=[0.35, 0.5, 0.65, 0.8])
-    cal.add_argument('--framing-radius', type=float, default=120,
-                     help='light radius while choosing the framing (covers the largest object)')
     cal.add_argument('--radii', type=float, nargs='+', default=[50, 70, 90, 120, 160, 220])
-    cal.add_argument('--device', default='cuda:0', help='YOLO11m device; pin the GPU with CUDA_VISIBLE_DEVICES')
+    cal.add_argument('--device', default='cuda:0', help='Ultralytics device; pin the GPU with CUDA_VISIBLE_DEVICES')
     sub.add_parser('map', help='draw captures/room_map.png from scene_config.json and the level')
-    sw = sub.add_parser('sweep', help='score a grid of light positions for every object (YOLO9000)')
-    sw.add_argument('--camera-height', type=float, default=None, help='default: scene_config.json')
+    sw = sub.add_parser('sweep', help='score a grid of light positions for every object (YOLOE-26n by default)')
+    sw.add_argument('--model', choices=['yoloe26n', 'yolo9000'], default='yoloe26n',
+                    help='primary scorer (default: yoloe26n)')
     sw.add_argument('--az-step', type=int, default=SWEEP_AZ_STEP)
     sw.add_argument('--elevations', type=int, nargs='+', default=SWEEP_ELEVATIONS)
     sw.add_argument('--objects', nargs='+', default=None, help='default: every object in object_classes.json')
     sw.add_argument('--out', required=True, help='output folder, e.g. captures/sweep_2026-10-06')
-    sw.add_argument('--device', default='cuda:0', help='YOLO11m device; pin the GPU with CUDA_VISIBLE_DEVICES')
+    sw.add_argument('--device', default='cuda:0', help='Ultralytics device; pin the GPU with CUDA_VISIBLE_DEVICES')
     sw.add_argument('--rescore', action='store_true', help='re-score the saved frames (no Unreal needed)')
     ck = sub.add_parser('check-objects', help='render each object once; flag models whose drawn size != bounds')
     ck.add_argument('--objects', nargs='+', default=None, help='default: every object in object_classes.json')

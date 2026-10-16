@@ -67,10 +67,10 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=<gpu> \
 ./infra/stop.sh                                                      # stops only your own Unreal
 ```
 
-Settings that reproduce Oct 6 are the defaults: `training/scene_config.json` (camera 165 cm,
+Historical Oct 6 settings were: `training/scene_config.json` (camera 165 cm,
 object fills 50% of a 640×640 frame, light 120 cm away, 0 settle frames), a 12 × 5 light grid
 (every 30°, heights 5/25/45/65/85°), `training/object_classes.json` (107 objects) and
-`training/object_scale.json` (7 model fixes). The Oct 6 results are in the meeting notes.
+`training/object_scale.json` (7 model fixes). The Oct 6 results are in the meeting notes. Current captures preserve the complete recorded camera pose and FOV; use a new output folder to capture new frames.
 
 ## Adapting it
 
@@ -80,7 +80,7 @@ object fills 50% of a 640×640 frame, light 120 cm away, 0 settle frames), a 12 
 | Camera pose file, Darknet location | `VRNAV_POSE`, `DARKNET_DIR` (environment) |
 | Light grid (directions, heights) | `sweep --az-step 15 --elevations 10 30 50 70` ([scene.md](scene.md)) |
 | Which objects | `sweep --objects Mug Chair ...`, or edit `object_classes.json` ([data_files.md](data_files.md)) |
-| Camera height, framing, light radius | `training/scene_config.json`, or `sweep --camera-height` ([data_files.md](data_files.md)) |
+| Camera position/rotation/FOV; light radius | `VRNAV_POSE`; `training/scene_config.json` ([data_files.md](data_files.md)) |
 | What counts as a correct answer | `object_classes.json` (classes) and `Yolo9000.score` (box rule) ([vision.md](vision.md)) |
 | A different vision model | add a scorer to `vision.py` and use it in `scene.frame_row` ([vision.md](vision.md)) |
 | A new Unreal command | add a function to `COMMANDS` in `command_server.py` ([command_server.md](command_server.md)) |

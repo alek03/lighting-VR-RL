@@ -1,8 +1,6 @@
 {
   "camera": {
     "pose_file": "/opt/Unrealprojects/tufaelz/Scripts/pose.json",
-    "height_cm": 165.0,
-    "fill": 0.5,
     "width": 640,
     "height": 640
   },

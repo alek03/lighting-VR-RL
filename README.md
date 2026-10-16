@@ -9,7 +9,7 @@ around the object to maximise a vision model's confidence in identifying it.
 - `unreal_scripts/command_server.py` — runs *inside* the Unreal editor; localhost command server
 - `bridge_client/unreal_client.py` — Python client for it, library and CLI
 - `training/scene.py` — camera/light geometry, object masks, calibration and the lighting sweep
-- `training/vision.py` — YOLO9000 scorer (Darknet, per-class probabilities) and YOLO11m scorer
+- `training/vision.py` — YOLOE-26n default scorer, legacy YOLO9000, and auxiliary YOLO11m scorer
 - `training/object_classes.json` — which YOLO9000 classes count as correct for each object
 - `training/object_scale.json` — scale fixes for models whose drawn size ≠ stored bounds
 - `infra/` — starting/stopping the editor, plus the older live-viewer stack (see below)
@@ -37,7 +37,7 @@ cu128 index: the driver supports CUDA 12.8 at most.
     PROJECT=/opt/Unrealprojects/tufaelz_frozen_2026-10-06/tufaelz.uproject ./infra/start_editor.sh   # GPU 1 by default
     .venv/bin/python -m bridge_client.unreal_client check --object Mug     # spawn, capture, clean up
     CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 \
-        .venv/bin/python -m training.scene sweep --out captures/sweep_2026-10-06   # ~70 min, resumable
+        .venv/bin/python -m training.scene sweep --out captures/sweep_fixed_camera   # ~70 min, resumable
     ./infra/stop.sh                 # stops only your own Unreal processes
 
 Commands the server accepts: `ping`, `describe`, `status`, `spawn`, `remove`, `scale_object`,
@@ -78,7 +78,7 @@ template directory by hand silently omits `/Game/LevelPrototyping`, `/Game/Chara
 ## Status
 
 Working (2026-10-06): headless editor on a chosen GPU; all 107 scorable objects spawn, lit by a
-flashlight matching the VR torch (incl. its lighting channels), framed per object; object masks
+flashlight matching the VR torch (incl. its lighting channels), captured with the recorded camera unchanged; object masks
 for checking where YOLO's boxes are; YOLO9000 scoring with confidence, top-3 guesses and
 correct/partial/wrong verdicts; a resumable 60-position lighting sweep over all objects.
 
@@ -92,3 +92,7 @@ Next: deliverables from the sweep (`deliverables/`), then the RL environment.
 `start.sh`, `launch_ue.sh`, `frame_server.py`, `control_bridge.py` and `walk_agent.py` were built for
 the `render_test` ThirdPerson demo: Unreal in `-game` mode, frames via `-dumpmovie`, input injected
 through Pixel Streaming and a headless Chromium.
+
+Captures preserve the position, rotation and field of view in `VRNAV_POSE` (default: the live project’s `Scripts/pose.json`). Objects are no longer automatically centred or zoomed to fill the image. Use a new sweep output folder so previously captured zoomed images are not reused.
+
+Sweeps and `--rescore` now default to YOLOE-26n (`yoloe-26n-seg.pt`); use `--model yolo9000` for the legacy model. Upgrade dependencies with `.venv/bin/pip install -U -r requirements.txt`. First use requires model/text-encoder downloads. See [vision model details](ReadMes/vision.md).

@@ -14,8 +14,8 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=<gpu> \
 ```
 
 For every object in `object_classes.json` (or `--objects ...`): place it (scaled if listed in
-`object_scale.json`), aim and zoom the camera, capture its **mask**, then for every light position
-render a frame, score it with YOLO9000 (and YOLO11m if the object has a COCO class), and check
+`object_scale.json`), use the unchanged recorded camera, capture its **mask**, then for every light position
+render a frame, score it with YOLOE-26n (and YOLO11m if the object has a COCO class), and check
 YOLO's box against the mask. About 35 s per object; the Oct 6 run took 59 min.
 
 | Option | Default | Meaning |
@@ -24,7 +24,6 @@ YOLO's box against the mask. About 35 s per object; the Oct 6 run took 59 min.
 | `--objects` | all 107 | Subset of objects |
 | `--az-step` | 30 | Degrees between light directions (12 directions) |
 | `--elevations` | 5 25 45 65 85 | Light heights in degrees above the object's centre |
-| `--camera-height` | from `scene_config.json` (165) | Camera height in cm |
 | `--rescore` | | Re-score the saved frames instead of rendering (no Unreal needed; ~12 min) |
 
 **Output:** `<out>/sweep.csv` (one row per object × light position), `<out>/frames/<Object>/el.._az...png`
@@ -58,22 +57,21 @@ positions and YOLO11m scores are kept; the old table is saved as `sweep_before_r
 
 Renders each object once and compares its silhouette with its stored size (bounds). Flags objects
 that overflow the frame, are missing, or don't match their bounds (IoU < 0.4), and for flagged
-objects measures the drawn width and prints a **suggested scale** for `object_scale.json`. Writes
+objects keeps the same camera without zooming out or suggesting scale changes. Writes
 `object_check.json`, `contact_sheet.jpg` (green = silhouette box, magenta = bounds) and one frame
 per object. Run it whenever the Unreal objects change. An object that isn't drawn at all at scale 1
 (as the Thimble was) gets no suggestion: try a few scales with `bridge_client` + `scale_object`.
 
 ### `calibrate` and `map` (first runs)
 
-- `calibrate`: measures settle frames and chooses framing (`fill`) and light radius with YOLO11m
+- `calibrate`: measures settle frames and chooses light radius with the recorded camera with YOLO11m
   on the original 10 objects; writes `scene_config.json`, `calibration.md`, `logs/calibration.json`.
   Re-running it overwrites the settings the Oct 6 experiment used.
-- `map`: draws `captures/room_map.png` (top and side view of camera, zoom range and light sphere).
+- `map`: draws `captures/room_map.png` (top and side view of camera, fixed field of view and light sphere).
 
 ## The code, for editing
 
-- **Geometry (no Unreal):** `camera_pose` (camera at the `pose.json` position, aimed at the object,
-  zoomed so the object fills `fill` of the frame), `light_position` (azimuth/elevation/radius →
+- **Geometry (no Unreal):** `camera_pose` (loads position, rotation and FOV from `pose.json` unchanged), `light_position` (azimuth/elevation/radius →
   world point; angles relative to the camera: azimuth 0 = camera's side, 90 = its right;
   elevation 0 = level, 90 = overhead), `projected_box` (an object's 3D bounds → image box),
   `mask_box`.
@@ -83,3 +81,23 @@ per object. Run it whenever the Unreal objects change. An object that isn't draw
 - **`frame_row`**: turns one frame into one CSV row; this is where a different vision model would
   plug in ([vision.md](vision.md)).
 - **Paths:** `POSE` (env `VRNAV_POSE`), `CONFIG` (`scene_config.json`), `OBJECT_SCALE`.
+
+The camera is loaded once per scene from `VRNAV_POSE` (default: `/opt/Unrealprojects/tufaelz/Scripts/pose.json`). No per-object aiming, height override, zoom, or image crop is applied. Small objects remain small and large objects may extend outside the frame. Supersampling still resizes the entire frame for anti-aliasing. Legacy `camera.fill` and `camera.height_cm` config keys are ignored; the corresponding CLI options have been removed.
+
+Use a **new output folder** for fixed-camera sweeps: resume skips completed objects in an existing folder, and `--rescore` uses existing images without recapturing them. Previous zoomed frames and calibration results remain historical artifacts.
+
+## Choosing the vision model
+
+YOLOE-26n is now the default for both capture and `--rescore`:
+
+```bash
+.venv/bin/python -m training.scene sweep --out captures/sweep_yoloe26n --device cuda:0
+.venv/bin/python -m training.scene sweep --out captures/sweep_yoloe26n --rescore --device cuda:0
+```
+
+Use `--model yolo9000` for the legacy scorer. `--device` controls YOLOE and the auxiliary
+YOLO11m model. `vision_model.json` records the selected primary model; a capture resume
+with a different model is rejected. Older folders without this metadata are treated as
+YOLO9000 runs. `--rescore` explicitly permits a model change using saved images; it does
+not update old camera framing. Top-three, confidence and empty legacy CSV fields for
+YOLOE are explained in [vision.md](vision.md). Calibration still uses YOLO11m.

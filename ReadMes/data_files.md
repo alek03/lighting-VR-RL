@@ -44,8 +44,7 @@ Written by `scene.py calibrate` in the first runs; read by `sweep`, `check-objec
 
 | Key | Value | Meaning |
 |---|---|---|
-| `camera.height_cm` | 165 | Camera height (horizontal position from `pose.json`) |
-| `camera.fill` | 0.5 | Object's bounding sphere spans 50% of the frame width (zoom per object) |
+| `camera.pose_file` | project `Scripts/pose.json` | Records the calibration pose source; runtime source is `VRNAV_POSE` or its default. Position, rotation and FOV are preserved. |
 | `camera.width/height` | 640 | Frame size (rendered at 2× and shrunk: `render.supersample`) |
 | `light.radius_cm` | 120 | Light distance from the object |
 | `render.settle_frames` | 0 | Frames to wait after moving the light (re-measured: still 0) |

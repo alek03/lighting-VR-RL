@@ -64,7 +64,7 @@ image files on disk (for pictures).
 | `/opt/Unrealprojects/tufaelz_frozen_2026-10-06` | **Frozen copy** of the live project (Content, Config, Scripts, Docs) used for the sweep, so results are reproducible | You |
 | `/opt/Unrealprojects/tufaelz_old` | Your Sep 23 copy, from before Bradley's Oct 5 update (10 objects, old lighting) | You |
 | `…/Content/Python/objectlab_*.py` | Python that runs inside Unreal. **Your server imports these.** | Bradley |
-| `…/Scripts/pose.json` | The recorded VR camera pose; your code reads its position | Bradley |
+| `…/Scripts/pose.json` | The recorded VR camera pose; your code preserves its position, rotation and FOV | Bradley |
 | `…/Config/objectlab_objects.json` | The list of 115 object names (catalogue ids 1–115) | Bradley |
 | `/opt/Unrealprojects/darknet` | Darknet and the YOLO9000 weights, config and class tree (`data/9k.*`) | Labmate npg5522 |
 | `/opt/UnrealEngine/UE-5.8.2` | The engine itself | Server |
@@ -249,7 +249,7 @@ built for an earlier demo and aren't used by the flashlight experiment; see
 | **SceneCapture2D** | A camera that renders into an image instead of the screen. |
 | **Lumen** | Unreal's real-time global illumination; why "settle frames" exist (currently 0 needed). |
 | **Lighting channels** | Checkboxes (0, 1, 2) on lights and objects: a light only lights objects sharing a channel. |
-| **FOV / fill** | The camera's field of view. `fill` = fraction of the frame the object spans; `camera_pose` computes the FOV from it. |
+| **FOV / fill** | The camera's field of view is loaded unchanged from `pose.json`; per-object `fill` adjustment has been removed. |
 | **Azimuth / elevation / radius** | Where the flashlight sits on the sphere around the object. |
 | **COCO / YOLO11m** | COCO is an 80-class image dataset; YOLO11m (2024) is trained on it. |
 | **YOLO9000 / WordNet** | YOLO9000 (2016) names ~9,000 classes arranged as a WordNet tree; WordNet groups synonyms into one class with an ID (`wnid`). |

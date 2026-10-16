@@ -12,7 +12,7 @@
 # which runs the script and then quits the editor.
 #
 # r.TextureStreaming=0: texture streaming picks resolution from the main viewport, which
-# never looks at the table, so our zoomed scene capture otherwise gets blurry low mips.
+# never looks at the table, so our scene capture otherwise gets blurry low mips.
 #
 # GPU_INDEX is the nvidia-smi index. Unreal's Vulkan RHI ignores -gpuindex; -graphicsadapter
 # works but counts in Vulkan's order, which on this host is nvidia-smi's shifted by one
