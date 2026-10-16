@@ -1,0 +1,33 @@
+{
+  "gpu": 1,
+  "unreal": {
+    "engine": "/opt/UnrealEngine/UE-5.8.2",
+    "project": "/home/axm6766/tufaelz_copy/tufaelz.uproject",
+    "map": "Content/XRFramework/Levels/L_XRTemplate.umap",
+    "port": 6780
+  },
+  "camera": {
+    "location": [1056.4, -247.8, 149.0],
+    "rotation": [-36.9, -2.5, 0.2],
+    "fov": 50
+  },
+  "image": {
+    "size": 640,
+    "supersample": 2,
+    "settle_frames": 0
+  },
+  "light": {
+    "radius_cm": 120,
+    "azimuths": [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330],
+    "elevations": [5, 25, 45, 65, 85]
+  },
+  "vision": {
+    "model": "models/yoloe-26l-seg.pt",
+    "min_confidence": 0.25,
+    "on_object": 0.5,
+    "name_fixes": {}
+  },
+  "table": {
+    "size_cm": null
+  }
+}
