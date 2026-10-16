@@ -88,13 +88,30 @@ class Unreal:
 
     def spawn(self, name):
         """Put an object on the table (replacing any other); returns its centre. Waits until
-        the object is drawn: the first time an object is used, Unreal takes a moment to prepare it."""
+        the object is drawn: the first time an object is used, Unreal takes a moment to prepare it.
+        If camera.fill is set in config.json, then aims and zooms the camera at the object."""
         self.centre = self.call('spawn', object=name)['centre']
         for _ in range(100):
             if self.capture_mask().any():
-                return self.centre
+                break
             time.sleep(0.1)
-        raise RuntimeError(name + ' did not appear in the camera view')
+        else:
+            raise RuntimeError(name + ' did not appear in the camera view')
+        if self.config['camera'].get('fill'):
+            self.zoom_to_object(self.config['camera']['fill'])
+        return self.centre
+
+    def zoom_to_object(self, fill):
+        """Turn the camera to the object and zoom until its larger side spans `fill` of the picture.
+        The camera stays in place. It aims at the object as drawn (its mask), not its stored
+        centre, which is off for some models."""
+        fov = self.config['camera']['fov']
+        self.set_camera(rotation=look_at(self.camera['location'], self.centre), fov=fov)
+        x0, y0, x1, y1 = [v / self.config['image']['size'] for v in self.true_box()]   # 0 to 1
+        pitch, yaw, roll = self.camera['rotation']
+        # Turn by how far the object is off-centre, then zoom by how much of the picture it takes up.
+        rotation = [pitch - ((y0 + y1) / 2 - 0.5) * fov, yaw + ((x0 + x1) / 2 - 0.5) * fov, roll]
+        self.set_camera(rotation=rotation, fov=fov * max(x1 - x0, y1 - y0) / fill)
 
     def remove(self):
         self.call('remove')

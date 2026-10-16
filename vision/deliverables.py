@@ -7,7 +7,6 @@
   3_best_vs_worst.png               objects where the light matters most: best vs worst frame
   4_recognition_map.png             every object by accuracy and confidence
   6_average_lighting_map.png        top view: mean confidence and accuracy per light position
-  method_true_object_box.png        how the true (dashed magenta) object box is made
   objects/<Object>/1_lighting_map_<Object>.png   top view: confidence and result per position
   objects/<Object>/2_image_grid_<Object>.png     all 60 frames with YOLO's box and the true box
 
@@ -87,23 +86,18 @@ def boxes(r):
 
 # ---- the top-view room map --------------------------------------------------------------------
 
-def room(ax, title, camera, lit=True):
-    """lit=False draws the mask render's view: everything but the object hidden, no light."""
+def room(ax, title, camera):
     ax.set_facecolor(SURF); ax.set_aspect('equal'); ax.axis('off')
     yaw = math.atan2(OBJ[1] - camera[1], OBJ[0] - camera[0])
     for s in (-1, 1):
         a = yaw + s * math.radians(CAMERA['fov'] / 2)
         ax.plot([camera[0], camera[0] + 420 * math.cos(a)], [camera[1], camera[1] + 420 * math.sin(a)], color='#86b6ef', lw=1.2, zorder=1)
-    if lit:
-        if TABLE:
-            ax.add_patch(Rectangle(TABLE[:2], TABLE[2], TABLE[3], fc=SLAB, ec='none', alpha=0.85, zorder=1))
-        ax.add_patch(Circle(OBJ[:2], RADIUS, fill=False, ec='#b9b8b3', lw=1.5, zorder=2))
-        for text, a, r in (('front', 13, RADIUS + 16), ('right', 90, RADIUS + 24), ('behind', 180, RADIUS + 30), ('left', 270, RADIUS + 22)):
-            x, y = light_position(OBJ, camera, a, 0, r)[:2]
-            ax.text(x, y, text, ha='center', va='center', fontsize=11, color=INK2, fontweight='bold')
-    elif TABLE:
-        ax.add_patch(Rectangle(TABLE[:2], TABLE[2], TABLE[3], fill=False, ec='#b9b8b3', lw=1.2, ls=(0, (4, 3)), zorder=1))
-        ax.text(TABLE[0] + TABLE[2] / 2, TABLE[1] + TABLE[3] - 14, 'table: hidden', ha='center', fontsize=10, color='#9a9993')
+    if TABLE:
+        ax.add_patch(Rectangle(TABLE[:2], TABLE[2], TABLE[3], fc=SLAB, ec='none', alpha=0.85, zorder=1))
+    ax.add_patch(Circle(OBJ[:2], RADIUS, fill=False, ec='#b9b8b3', lw=1.5, zorder=2))
+    for text, a, r in (('front', 13, RADIUS + 16), ('right', 90, RADIUS + 24), ('behind', 180, RADIUS + 30), ('left', 270, RADIUS + 22)):
+        x, y = light_position(OBJ, camera, a, 0, r)[:2]
+        ax.text(x, y, text, ha='center', va='center', fontsize=11, color=INK2, fontweight='bold')
     ax.plot(*OBJ[:2], 'o', ms=6, color='#d03b3b', mec='white', mew=1, zorder=6)
     ax.plot(*camera[:2], 'o', ms=12, color='#2a78d6', mec='white', mew=1.5, zorder=6)
     ax.text(camera[0], camera[1] + 12, 'camera', ha='center', va='top', fontsize=10, color='#2a78d6', fontweight='bold')
@@ -289,77 +283,6 @@ def average_map(rows, azimuths, elevations, camera, path):
     fig.savefig(path, dpi=150, facecolor=SURF); plt.close(fig)
 
 
-# ---- method figure: how the true object box is made ------------------------------------------
-
-def true_box_method(sweep, frames, camera, path):
-    """Four steps from the normal frame to the dashed true box, for one object's best frame."""
-    r = max((f for f in frames if f['iou']), key=lambda r: (r['verdict'] == 'correct', r['confidence']))
-    name = r['object']
-    lit = Image.open(Path(sweep) / r['frame'])
-    mask = np.asarray(Image.open(Path(sweep) / 'frames' / name / 'mask.png').convert('L')) > 0
-    ys, xs = np.nonzero(mask)
-    x0, y0, x1, y1 = xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
-    fig = plt.figure(figsize=(20, 10.4), facecolor=SURF)
-    cols = [0.01, 0.26, 0.51, 0.76]
-    heads = ['1.  Normal frame', '2.  Mask render', '3.  Box = outermost object pixels', '4.  Drawn on every frame']
-    subs = ['Camera + flashlight, everything visible.\nThis is what YOLO sees.',
-            'Same camera and zoom, rendered once per object.\nOnly the object is drawn, as depth (distance from\nthe camera), so light, shadow and colour cannot change it.',
-            'Every non-black pixel is object.\nThe box runs from the outermost object pixel\non each side.',
-            'The camera and object never move,\nso one mask box serves all 60 light positions.']
-    for x, h, t in zip(cols, heads, subs):
-        fig.text(x + 0.005, 0.965, h, fontsize=15, fontweight='bold', va='top')
-        fig.text(x + 0.005, 0.925, t, fontsize=10.5, color=INK2, va='top', linespacing=1.4)
-
-    # 1 + 2: where things are, top view
-    for k, lit_scene in ((0, True), (1, False)):
-        ax = fig.add_axes([cols[k], 0.45, 0.235, 0.39])
-        room(ax, '', camera, lit=lit_scene)
-        if lit_scene:
-            lx, ly = float(r['light_x']), float(r['light_y'])
-            ax.annotate('', OBJ[:2], (lx, ly), arrowprops=dict(arrowstyle='->', color='#fab219', lw=2))
-            ax.plot(lx, ly, 'o', ms=13, color='#fab219', mec=INK, mew=0.8, zorder=7)
-            ax.text(lx + 12, ly, 'flashlight', fontsize=10, color='#b07a00', fontweight='bold', va='center')
-        else:
-            ax.text(0.75, 0.06, 'flashlight: off', fontsize=10, color='#9a9993', ha='center', transform=ax.transAxes)
-    for k, img, cap in ((0, lit, 'frame (%s, %d° high)' % (DIRS.get(r['azimuth'], '%d°' % r['azimuth']), r['elevation'])),
-                        (1, mask, 'mask.png')):
-        ax = fig.add_axes([cols[k] + 0.02, 0.05, 0.195, 0.38])
-        ax.imshow(img, cmap='gray'); ax.set_xticks([]); ax.set_yticks([])
-        for sp in ax.spines.values(): sp.set_color('#cdcdc8')
-        ax.set_xlabel(cap, fontsize=10, color=INK2)
-
-    # 3: the extremes of the object pixels, zoomed in on the mask
-    pad = 0.25 * max(x1 - x0, y1 - y0)
-    ax = fig.add_axes([cols[2] + 0.005, 0.05, 0.235, 0.79])
-    ax.imshow(mask, cmap='gray', extent=(0, mask.shape[1], mask.shape[0], 0))
-    ax.set_xlim(x0 - 2.2 * pad, x1 + 2.2 * pad); ax.set_ylim(y1 + pad, y0 - pad); ax.set_xticks([]); ax.set_yticks([])
-    for v in (x0, x1):
-        ax.axvline(v, color='#86b6ef', lw=1, ls=':')
-    for v in (y0, y1):
-        ax.axhline(v, color='#86b6ef', lw=1, ls=':')
-    ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, ec=TRUE_COL, lw=2.4, ls=(0, (4, 3))))
-    extremes = [(xs.argmin(), 'x0 = %d\nleftmost' % x0, (-1.2, 0)), (xs.argmax(), 'x1 = %d\nrightmost + 1' % x1, (1.2, 0)),
-                (ys.argmin(), 'y0 = %d   topmost' % y0, (0, -0.5)), (ys.argmax(), 'y1 = %d   bottom-most + 1' % y1, (0, 0.5))]
-    for i, text, (dx, dy) in extremes:
-        px, py = xs[i] + 0.5, ys[i] + 0.5
-        ax.plot(px, py, 'o', ms=9, color='#fab219', mec=INK, mew=0.8, zorder=5)
-        ax.annotate(text, (px, py), xytext=(px + dx * pad, py + dy * pad), fontsize=11, fontweight='bold', color='white',
-                    ha='center', va='center', arrowprops=dict(arrowstyle='-', color='#fab219', lw=1.2),
-                    bbox=dict(boxstyle='round,pad=0.3', fc='#2b2b2b', ec='none'))
-    ax.set_xlabel('pixels in the 640 × 640 frame (y counts down)', fontsize=10, color=INK2)
-
-    # 4: the true box on the frame, with YOLO's box and how the two are compared
-    ax = fig.add_axes([cols[3] + 0.005, 0.30, 0.235, 0.54])
-    frame(ax, sweep, r)
-    ax.set_xlabel('YOLO: %s' % label(r), fontsize=10.5, color=INK2)
-    fig.legend(handles=box_legend(2), loc='upper left', bbox_to_anchor=(cols[3] + 0.005, 0.27), frameon=False, fontsize=10.5)
-    fig.text(cols[3] + 0.01, 0.17, 'YOLO\'s box is "on the object" if either is ≥ 0.5:\n'
-             '  IoU (overlap ÷ union of the boxes) = %.2f\n'
-             '  object pixels ÷ YOLO box area = %.2f'
-             % (float(r['iou']), float(r['object_fraction'])), fontsize=10.5, color=INK, va='top', linespacing=1.6)
-    fig.savefig(path, dpi=130, facecolor=SURF); plt.close(fig)
-
-
 # ---- 0: overview ----------------------------------------------------------------------------
 
 def overview(example, path):
@@ -383,7 +306,6 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('sweep', help='sweep folder (contains sweep.csv, settings.json and frames/)')
     ap.add_argument('--best-worst', type=int, default=6, help='objects shown in 3_best_vs_worst.png')
-    ap.add_argument('--method-object', default='Mug', help='object shown in method_true_object_box.png')
     ap.add_argument('--out', help='output folder (default: <sweep>/deliverables)')
     args = ap.parse_args()
     OUT = Path(args.out or Path(args.sweep) / 'deliverables')
@@ -407,7 +329,6 @@ def main():
     striking = [s[0] for s in sorted(stats, key=lambda s: -(s[4] - s[3]))[:args.best_worst]]
     best_worst(args.sweep, rows, striking, OUT / '3_best_vs_worst.png')
     average_map(rows, azimuths, elevations, camera, OUT / '6_average_lighting_map.png')
-    true_box_method(args.sweep, rows[args.method_object], camera, OUT / 'method_true_object_box.png')
     overview(striking[0], OUT / '0_overview.png')
     print('%d objects -> %s' % (len(rows), OUT))
 

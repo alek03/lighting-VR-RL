@@ -7,9 +7,10 @@
     "port": 6780
   },
   "camera": {
-    "location": [1056.4, -247.8, 149.0],
-    "rotation": [-36.9, -2.5, 0.2],
-    "fov": 50
+    "location": [943.9, -229.7, 165.0],
+    "rotation": [-23.8, -6.6, 0.0],
+    "fov": 29,
+    "fill": 0.5
   },
   "image": {
     "size": 640,
@@ -22,7 +23,7 @@
     "elevations": [5, 25, 45, 65, 85]
   },
   "vision": {
-    "model": "models/yoloe-26l-seg.pt",
+    "model": "models/yoloe-26x-seg.pt",
     "min_confidence": 0.25,
     "on_object": 0.5,
     "name_fixes": {}

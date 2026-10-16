@@ -20,7 +20,7 @@ from PIL import Image
 
 from unreal_bridge import CONFIG, mask_box
 
-POSITION_FIELDS = ['object', 'elevation', 'azimuth', 'light_x', 'light_y', 'light_z', 'frame']
+POSITION_FIELDS = ['object', 'elevation', 'azimuth', 'light_x', 'light_y', 'light_z', 'fov', 'frame']
 SWEEP_FIELDS = POSITION_FIELDS + [
     'verdict', 'confidence', 'top1', 'top1_conf', 'top2', 'top2_conf', 'top3', 'top3_conf',
     'box_x0', 'box_y0', 'box_x1', 'box_y1', 'iou', 'object_fraction',
@@ -39,7 +39,7 @@ def render(out, objects=None):
         if new_file:
             writer.writeheader()
             # The settings this sweep was made with, for the figures and for later reference.
-            settings = {'camera': ue.camera, 'light': CONFIG['light'], 'image': CONFIG['image'],
+            settings = {'camera': CONFIG['camera'], 'light': CONFIG['light'], 'image': CONFIG['image'],
                         'table': CONFIG['table'], 'project': CONFIG['unreal']['project']}
             (out / 'settings.json').write_text(json.dumps(settings, indent=2))
         todo = [n for n in (objects or ue.objects()) if n not in done]
@@ -59,7 +59,7 @@ def render(out, objects=None):
                     path = folder / ('el%02d_az%03d.png' % (el, az))
                     Image.fromarray(ue.capture()).save(path)
                     rows.append(dict(zip(POSITION_FIELDS, [name, el, az] + [round(v, 1) for v in light]
-                                         + [str(path.relative_to(out))])))
+                                         + [round(ue.camera['fov'], 2), str(path.relative_to(out))])))
             writer.writerows(rows)              # only once all of the object's pictures exist
             f.flush()
             minutes = (time.time() - started) / 60
