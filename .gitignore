@@ -13,3 +13,4 @@ deliverables/
 
 # Downloaded model weights
 models/
+mobileclip2_b.ts

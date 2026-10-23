@@ -522,28 +522,27 @@ def calibrate(args):
                       'radius_mean_conf': radius_means}, indent=2))
 
 
-SWEEP_FIELDS = ['object', 'id', 'elevation', 'azimuth', 'light_x', 'light_y', 'light_z', 'frame',
-                'accepted', 'verdict', 'confidence',
-                'top1', 'top1_wnid', 'top1_conf', 'top2', 'top2_conf', 'top3', 'top3_conf',
-                'box_x0', 'box_y0', 'box_x1', 'box_y1', 'objectness',
+SWEEP_FIELDS = ['object', 'tag', 'id', 'elevation', 'azimuth', 'light_x', 'light_y', 'light_z', 'frame',
+                'verdict', 'confidence',
+                'top1', 'top1_conf', 'top2', 'top2_conf', 'top3', 'top3_conf',
+                'box_x0', 'box_y0', 'box_x1', 'box_y1',
                 'iou', 'object_fraction', 'coverage', 'centre_in_box',
                 'truth_x0', 'truth_y0', 'truth_x1', 'truth_y1', 'yolo11m_confidence']
 
 
-def frame_row(yolo9000, path, name, mask, base):
-    """One sweep row: `base` (object, position, light, YOLO11m) plus YOLO9000's result for the frame."""
-    r = yolo9000.score(path, name, mask=mask)
-    row = dict(base, accepted='; '.join(r['accepted']), verdict=r['verdict'], confidence=round(r['confidence'], 4))
+def frame_row(scorer, path, name, mask, base):
+    """Combine one YOLOE result with its object, light position, and frame path."""
+    r = scorer.score(path, name, mask=mask)
+    row = dict(base, tag=r['tag'], verdict=r['verdict'], confidence=round(r['confidence'], 4))
     top = r['top3'] + [{}] * (3 - len(r['top3']))
     for i, t in enumerate(top, 1):
         row['top%d' % i], row['top%d_conf' % i] = t.get('class', ''), t.get('confidence', '')
-    row['top1_wnid'] = top[0].get('wnid', '')
     if r.get('truth_box'):
         row.update(zip(('truth_x0', 'truth_y0', 'truth_x1', 'truth_y1'), [round(v) for v in r['truth_box']]))
     b = r.get('top_box')
     if b:
         row.update(zip(('box_x0', 'box_y0', 'box_x1', 'box_y1'), b['box']))
-        row.update({k: b[k] for k in ('objectness', 'iou', 'object_fraction', 'coverage', 'centre_in_box') if k in b})
+        row.update({k: b[k] for k in ('iou', 'object_fraction', 'coverage', 'centre_in_box') if k in b})
     return row
 
 
@@ -556,26 +555,24 @@ def _progress(k, total, name, rows, started):
 
 
 def sweep_sphere(args):
-    """Score every light position on an azimuth x elevation grid for every object, with YOLO9000
-    (and YOLO11m where the object has a COCO class), using the calibrated camera and radius.
+    """Score every calibrated light position with YOLOE tags and YOLO11m comparison scores.
 
     Writes <out>/sweep.csv (one row per object x light position), <out>/frames/<Object>/*.png
     and each object's mask. Objects already complete in the CSV are skipped, so an interrupted
     run continues where it stopped. The true object box is the mask's box; `object_fraction` is
     the share of YOLO's box covered by object pixels (low = the box is mostly shadow or table).
 
-    With --rescore, no rendering: the saved frames are scored again (e.g. after changing
-    object_classes.json or the box rule), keeping each row's light position and YOLO11m score.
+    With --rescore, score saved frames again without rendering, keeping each light position.
     The previous table is kept as sweep_before_rescore.csv."""
     import csv
-    from training.vision import COCO_CLASS, Scorer, Yolo9000
+    from training.vision import COCO_CLASS, Scorer, YoloE26
     out = Path(args.out)
     table = out / 'sweep.csv'
     if args.rescore:
         old = list(csv.DictReader(table.open()))
         backup = out / 'sweep_before_rescore.csv'
         table.replace(backup)
-        yolo9000, started = Yolo9000(), time.time()
+        scorer, started = YoloE26(device=args.device), time.time()
         names = list(dict.fromkeys(r['object'] for r in old))
         with table.open('w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=SWEEP_FIELDS)
@@ -586,7 +583,7 @@ def sweep_sphere(args):
                 for r in (r for r in old if r['object'] == name):
                     base = {key: r[key] for key in ('object', 'id', 'elevation', 'azimuth', 'light_x', 'light_y',
                                                     'light_z', 'frame', 'yolo11m_confidence')}
-                    rows.append(frame_row(yolo9000, out / r['frame'], name, mask, base))
+                    rows.append(frame_row(scorer, out / r['frame'], name, mask, base))
                 writer.writerows(rows); f.flush()
                 _progress(k, len(names), name, rows, started)
         print('wrote', table, '(previous table: %s)' % backup)
@@ -611,7 +608,7 @@ def sweep_sphere(args):
         done = {k: n for k, n in done.items() if n == per_object}
     todo = [n for n in names if n not in done]
     print('%d objects, %d already done, %d to go' % (len(names), len(names) - len(todo), len(todo)), flush=True)
-    yolo9000, yolo11m = Yolo9000(), Scorer(device=args.device)
+    scorer, yolo11m = YoloE26(device=args.device), Scorer(device=args.device)
     new_file = not table.exists()
     started = time.time()
     with UnrealClient(timeout=300) as ue, table.open('a', newline='') as f:
@@ -639,7 +636,7 @@ def sweep_sphere(args):
                                 'light_x': round(light[0], 1), 'light_y': round(light[1], 1), 'light_z': round(light[2], 1),
                                 'frame': str(path.relative_to(out)),
                                 'yolo11m_confidence': '' if COCO_CLASS.get(name) is None else round(yolo11m.score(img, name), 4)}
-                        rows.append(frame_row(yolo9000, path, name, mask, base))
+                        rows.append(frame_row(scorer, path, name, mask, base))
                 writer.writerows(rows); f.flush()
                 _progress(k, len(todo), name, rows, started)
         finally:
@@ -738,15 +735,15 @@ def main():
     cal.add_argument('--framing-radius', type=float, default=120,
                      help='light radius while choosing the framing (covers the largest object)')
     cal.add_argument('--radii', type=float, nargs='+', default=[50, 70, 90, 120, 160, 220])
-    cal.add_argument('--device', default='cuda:0', help='YOLO11m device; pin the GPU with CUDA_VISIBLE_DEVICES')
+    cal.add_argument('--device', default='cuda:0', help='detector device; pin the GPU with CUDA_VISIBLE_DEVICES')
     sub.add_parser('map', help='draw captures/room_map.png from scene_config.json and the level')
-    sw = sub.add_parser('sweep', help='score a grid of light positions for every object (YOLO9000)')
+    sw = sub.add_parser('sweep', help='score a grid of light positions for every object (YOLOE)')
     sw.add_argument('--camera-height', type=float, default=None, help='default: scene_config.json')
     sw.add_argument('--az-step', type=int, default=SWEEP_AZ_STEP)
     sw.add_argument('--elevations', type=int, nargs='+', default=SWEEP_ELEVATIONS)
     sw.add_argument('--objects', nargs='+', default=None, help='default: every object in object_classes.json')
     sw.add_argument('--out', required=True, help='output folder, e.g. captures/sweep_2026-10-06')
-    sw.add_argument('--device', default='cuda:0', help='YOLO11m device; pin the GPU with CUDA_VISIBLE_DEVICES')
+    sw.add_argument('--device', default='cuda:0', help='detector device; pin the GPU with CUDA_VISIBLE_DEVICES')
     sw.add_argument('--rescore', action='store_true', help='re-score the saved frames (no Unreal needed)')
     ck = sub.add_parser('check-objects', help='render each object once; flag models whose drawn size != bounds')
     ck.add_argument('--objects', nargs='+', default=None, help='default: every object in object_classes.json')

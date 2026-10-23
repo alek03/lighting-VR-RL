@@ -11,14 +11,16 @@ Builds the figures from a sweep. No Unreal or GPU needed.
 | sweep folder | (required) | A `sweep` output folder (`sweep.csv`, `frames/`) |
 | `--out` | `deliverables/` | Where to write the figures |
 | `--best-worst` | 6 | Objects shown in the best-vs-worst figure |
+| `--method-object` | Mug | Object shown in the true-box method figure |
 
-**Output** (about 170 MB for 107 objects, 5 minutes):
+**Output** (about 170 MB for 115 objects, 5 minutes):
 
 ```
 0_overview.png                         thumbnail of every figure next to its file name
 3_best_vs_worst.png                    objects with the largest confidence range: best vs worst frame
 4_recognition_map.png                  every object by accuracy (x) and confidence (y)
 6_average_lighting_map.png             top view: mean confidence and accuracy per light position
+method_true_object_box.png             how the true (dashed magenta) box is made; --method-object picks the object (default Mug)
 objects/<Object>/1_lighting_map_<Object>.png   top view: confidence and result per light position
 objects/<Object>/2_image_grid_<Object>.png     all 60 frames with YOLO's box and the true box
 ```
@@ -34,8 +36,7 @@ Numbers match the deliverable list in `reports/meeting3_report_notes.md` (5 and 
   hollow grey = no detection.
 - **Boxes in frames:** dashed magenta = true object box (from the mask); solid green/amber/red =
   YOLO's box.
-- **Recognition map colours:** blue = YOLO9000 learned the class with boxes; orange = photo labels
-  only (`yolo9000_box_trained` in `object_classes.json`).
+- **Recognition map:** per-object detection accuracy and confidence for the expected YOLOE tag.
 - **Average map colour scale** runs from 0 to just above the best position (shown on the colour
   bar), because averages over many objects span a narrow range.
 

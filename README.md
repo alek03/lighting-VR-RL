@@ -9,8 +9,8 @@ around the object to maximise a vision model's confidence in identifying it.
 - `unreal_scripts/command_server.py` — runs *inside* the Unreal editor; localhost command server
 - `bridge_client/unreal_client.py` — Python client for it, library and CLI
 - `training/scene.py` — camera/light geometry, object masks, calibration and the lighting sweep
-- `training/vision.py` — YOLO9000 scorer (Darknet, per-class probabilities) and YOLO11m scorer
-- `training/object_classes.json` — which YOLO9000 classes count as correct for each object
+- `training/vision.py` — YOLOE-26n tag scorer and YOLO11m comparison scorer
+- `training/object_classes.json` — all 115 Unreal object IDs and YOLOE prompt tags
 - `training/object_scale.json` — scale fixes for models whose drawn size ≠ stored bounds
 - `infra/` — starting/stopping the editor, plus the older live-viewer stack (see below)
 - `ReadMes/` — **start here**: setup, reproducing the experiment, one README per script, and `HOW_IT_WORKS.md` (guided tour)
@@ -77,15 +77,14 @@ template directory by hand silently omits `/Game/LevelPrototyping`, `/Game/Chara
 
 ## Status
 
-Working (2026-10-06): headless editor on a chosen GPU; all 107 scorable objects spawn, lit by a
-flashlight matching the VR torch (incl. its lighting channels), framed per object; object masks
-for checking where YOLO's boxes are; YOLO9000 scoring with confidence, top-3 guesses and
-correct/partial/wrong verdicts; a resumable 60-position lighting sweep over all objects.
+Working: headless editor on a chosen GPU; all 115 catalogue objects spawn, lit by a flashlight
+matching the VR torch (including lighting channels), framed by the fixed camera and scored with
+YOLOE tags and object masks. Sweeps use the existing 60 light positions.
 
 Known issue: 7 models in the Oct 5 project update are drawn at a different size from their
 stored bounds (worked around in `training/object_scale.json`; to be reported to the model authors).
 
-Next: deliverables from the sweep (`deliverables/`), then the RL environment.
+The bounded Gymnasium PPO light-search environment is in `rl/`; see [ReadMes/rl_light_search.md](ReadMes/rl_light_search.md).
 
 ### Older live-viewer stack
 

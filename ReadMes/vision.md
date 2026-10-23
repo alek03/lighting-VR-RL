@@ -1,47 +1,20 @@
-# `training/vision.py`
+# YOLOE vision scoring
 
-The vision models that judge each frame. Pin the GPU with
-`CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=<gpu>` (then `cuda:0` inside the program is
-that GPU).
-
-## `Yolo9000`: the main measure
+`training/vision.py` uses YOLOE-26n with fixed text prompts from `training/object_classes.json`.
+The 115 prompt tags use the object labels, with readable spacing and a few explicit names such as
+`cell phone`, `potted plant`, `computer keyboard`, and `reflex camera`.
 
 ```python
-from training.vision import Yolo9000
-model = Yolo9000()                                  # loads Darknet + weights from DARKNET_DIR
-result = model.score('frame.png', 'Mug', mask=mask) # mask: True where the object is (optional)
-# result: confidence, top3 [{class, wnid, confidence, class_prob}], verdict, top_box {box, objectness, iou, ...}
+from training.vision import YoloE26n
+scorer = YoloE26n(device='cuda:0')
+result = scorer.score('frame.png', 'Mug', mask=object_mask)
 ```
 
-- **Per-class probabilities.** Darknet's `detect()` keeps one label per box; the full probabilities
-  for all 9,418 classes are read from the network's output buffer instead.
-- **Classes are a tree** (WordNet): P(container) ≥ P(cup) ≥ P(teacup).
-- **confidence** = objectness × P(accepted class), the best over all boxes.
-- **top-3** = most specific classes with P ≥ `guess_thresh` (0.1), found by walking down the tree.
-- **verdict** for YOLO's most confident box (`none` if its objectness < `detect_thresh`, 0.25):
-  - `correct`: top guess is an accepted class or more specific, **and** the box is on the object
-  - `partial`: only a more general class (e.g. "ball" for Basketball), box on the object
-  - `wrong`: anything else, including any answer whose box is off the object
-- **On the object** = box overlaps the mask's box with IoU ≥ 0.5, **or** at least half the box is
-  object pixels (`on_object` argument). Neither (shadow, lit table, background) means wrong.
-- Accepted classes per object come from `object_classes.json` ([data_files.md](data_files.md)).
+`confidence` is YOLOE's highest detection confidence for the object's tag. `top3` lists up to
+three different detected tags. `verdict` is `correct` when the top detection has the expected tag
+and overlaps the object mask; it is `wrong` for another tag or an off-object detection, and `none`
+when no detection clears the threshold. Mask overlap uses IoU or the fraction of the predicted box
+covered by object pixels, with a default threshold of 0.5.
 
-Tunable in the constructor: `guess_thresh`, `detect_thresh`, `nms`, `max_boxes`; in `score`:
-`on_object`.
-
-## `Scorer`: YOLO11m (comparison)
-
-`Scorer().score(image, 'Mug')` → highest confidence for the object's COCO class (`COCO_CLASS`,
-filled from `object_classes.json`), or `None` if it has none. Weights download into `models/`.
-
-## `box_overlap(box, truth)`
-
-IoU, object fraction (of the box) and coverage (of the truth box) for two `[x0, y0, x1, y1]` boxes.
-
-## Adding another model (e.g. YOLOE-26)
-
-1. Add a class with `score(image_path, object_name, mask=None)` returning the same fields as
-   `Yolo9000.score` (`confidence`, `top3`, `verdict`, `top_box`, `accepted`, `truth_box`).
-2. In `training/scene.py`, create it in `sweep_sphere` and pass it to `frame_row` in place of
-   `yolo9000` (or add a `--model` option).
-3. Score the saved frames with `sweep --rescore --out <copy of a sweep folder>`; no rendering needed.
+The mask is evaluation ground truth only; it is never sent as a detector prompt. RGB NumPy images,
+PIL images, and image paths are supported. The checkpoint is `models/yoloe-26n-seg.pt`.

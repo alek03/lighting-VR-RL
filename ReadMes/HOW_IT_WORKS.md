@@ -12,9 +12,9 @@ are (decisions, measurements, findings), see [reports/meeting3_report_notes.md](
 ## The big picture
 
 The goal: an object sits on a table in a virtual room. A camera looks at it. A flashlight moves
-around the object, and a vision model (YOLO9000) tries to identify the object. The current stage
-measures how identification changes with the light's position for 107 objects; later an RL agent
-will learn to place the light.
+around the object, and YOLOE tries to identify the object's text tag. The fixed camera, object
+placement and screenshots stay unchanged while the bounded RL agent learns light moves over all
+115 catalogue objects.
 
 There are **two programs running at once**, and almost everything in this repo exists to let them
 talk to each other:
@@ -23,7 +23,7 @@ talk to each other:
 flowchart LR
     subgraph PY["Your Python (.venv) - outside Unreal"]
         S["training/scene.py<br/>geometry, sweep"]
-        V["training/vision.py<br/>YOLO9000 + YOLO11m scorers"]
+      V["training/vision.py<br/>YOLOE tag scorer"]
         C["bridge_client/unreal_client.py<br/>sends commands"]
         S --> C
         S --> V
@@ -46,8 +46,8 @@ flowchart LR
 3. **`unreal_client.py`** runs in your normal Python and sends those commands.
 4. **`scene.py`** works out where the camera and light should go, sends the commands, reads back
    the pictures, and runs the sweep.
-5. **`vision.py`** runs YOLO9000 (and YOLO11m for comparison) on each picture: confidence,
-   top-3 guesses, and whether the answer is correct.
+5. **`vision.py`** runs YOLOE on each picture: confidence for the requested tag, other detected
+   tags, and whether the best box matches the object mask.
 
 Python inside Unreal and Python outside it are **separate processes**. They can't call each
 other's functions directly. The only links between them are the TCP socket (for commands) and
@@ -66,7 +66,7 @@ image files on disk (for pictures).
 | `…/Content/Python/objectlab_*.py` | Python that runs inside Unreal. **Your server imports these.** | Bradley |
 | `…/Scripts/pose.json` | The recorded VR camera pose; your code reads its position | Bradley |
 | `…/Config/objectlab_objects.json` | The list of 115 object names (catalogue ids 1–115) | Bradley |
-| `/opt/Unrealprojects/darknet` | Darknet and the YOLO9000 weights, config and class tree (`data/9k.*`) | Labmate npg5522 |
+| `/opt/Unrealprojects/lighting-VR-RL-namra/models/yoloe-26n-seg.pt` | Copied YOLOE-26n checkpoint used with the catalogue prompt tags | Shared project copy |
 | `/opt/UnrealEngine/UE-5.8.2` | The engine itself | Server |
 
 Your repo, folder by folder:
@@ -89,9 +89,9 @@ vr-nav-rl/
 │   └── unreal_client.py     ← talks to the server; library + command line
 ├── training/
 │   ├── scene.py             ← camera/light geometry, mask helpers, calibrate, sweep, room map
-│   ├── vision.py            ← YOLO9000 scorer (the measure) + YOLO11m scorer (comparison)
+│   ├── vision.py            ← YOLOE tag scorer + YOLO11m comparison scorer
 │   ├── deliverables.py      ← builds the figures in deliverables/ from a sweep
-│   ├── object_classes.json  ← ground truth: which YOLO9000 classes count as correct, per object
+│   ├── object_classes.json  ← all 115 Unreal object IDs and YOLOE text tags
 │   ├── object_scale.json    ← scale fixes for 7 mis-sized models
 │   ├── scene_config.json    ← camera/light settings chosen by calibration (generated)
 │   └── calibration.md       ← calibration report from the first runs (generated; don't edit)
@@ -213,7 +213,7 @@ Four GPUs (`nvidia-smi` numbers 0–3). **You work on GPU 1** (announced to the 
 | What | How it's pinned to GPU 1 |
 |---|---|
 | Unreal | `start_editor.sh` with `GPU_INDEX=1` (default) → `-graphicsadapter=2` |
-| YOLO9000 (Darknet) and YOLO11m | `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1` (then `cuda:0` inside the program is GPU 1) |
+| YOLOE and YOLO11m | `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1` (then `cuda:0` inside the program is GPU 1) |
 
 Always confirm with `nvidia-smi` after starting something. A labmate (mzt5720) runs an editor on
 GPU 3, port 6780.
@@ -252,7 +252,7 @@ built for an earlier demo and aren't used by the flashlight experiment; see
 | **FOV / fill** | The camera's field of view. `fill` = fraction of the frame the object spans; `camera_pose` computes the FOV from it. |
 | **Azimuth / elevation / radius** | Where the flashlight sits on the sphere around the object. |
 | **COCO / YOLO11m** | COCO is an 80-class image dataset; YOLO11m (2024) is trained on it. |
-| **YOLO9000 / WordNet** | YOLO9000 (2016) names ~9,000 classes arranged as a WordNet tree; WordNet groups synonyms into one class with an ID (`wnid`). |
+| **YOLOE tag** | A readable class prompt from the complete Unreal object catalogue, such as `mug` or `computer keyboard`. |
 | **Objectness** | YOLO's confidence that a box contains *some* object, before saying which. |
 | **IoU** | Intersection over union: overlap of two boxes, 0 (none) to 1 (identical). |
 | **Generator / `yield`** | A Python function that can pause and resume; used for multi-frame commands. |

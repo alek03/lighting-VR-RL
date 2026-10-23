@@ -15,13 +15,13 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=<gpu> \
 
 For every object in `object_classes.json` (or `--objects ...`): place it (scaled if listed in
 `object_scale.json`), aim and zoom the camera, capture its **mask**, then for every light position
-render a frame, score it with YOLO9000 (and YOLO11m if the object has a COCO class), and check
-YOLO's box against the mask. About 35 s per object; the Oct 6 run took 59 min.
+render a frame, score the object's YOLOE tag (and YOLO11m when available), and check the top
+detection against the object mask. The camera and screenshot flow are unchanged.
 
 | Option | Default | Meaning |
 |---|---|---|
 | `--out` | (required) | Output folder |
-| `--objects` | all 107 | Subset of objects |
+| `--objects` | all 115 | Subset of objects |
 | `--az-step` | 30 | Degrees between light directions (12 directions) |
 | `--elevations` | 5 25 45 65 85 | Light heights in degrees above the object's centre |
 | `--camera-height` | from `scene_config.json` (165) | Camera height in cm |
@@ -38,14 +38,14 @@ objects are skipped (a half-finished object is redone).
 | `object`, `id`, `elevation`, `azimuth` | Which object (catalogue id) and light position |
 | `light_x/y/z` | Light position in world cm |
 | `frame` | The saved image, relative to `<out>` |
-| `accepted` | Classes that count as correct (from `object_classes.json`) |
-| `verdict` | `correct` / `partial` / `wrong` / `none` (see [vision.md](vision.md)) |
-| `confidence` | YOLO9000's best confidence for an accepted class, anywhere in the frame |
-| `top1..3`, `top1..3_conf`, `top1_wnid` | Its three most specific guesses; WordNet ID of the first |
-| `box_*`, `objectness` | YOLO's most confident box and how sure it is there's an object |
+| `tag` | Expected YOLOE prompt label from `object_classes.json` |
+| `verdict` | `correct` / `wrong` / `none` (see [vision.md](vision.md)) |
+| `confidence` | Highest YOLOE confidence for the expected tag |
+| `top1..3`, `top1..3_conf` | Highest-confidence distinct detected tags |
+| `box_*` | YOLOE's highest-confidence detection box |
 | `iou`, `object_fraction`, `coverage`, `centre_in_box` | Box check against the mask: overlap with the mask's box; share of YOLO's box that is object pixels; share of the object inside the box; whether the object's centre is inside |
 | `truth_*` | The mask's box (the true object box) |
-| `yolo11m_confidence` | YOLO11m's confidence, for objects with a COCO class |
+| `yolo11m_confidence` | YOLO11m comparison score, when the object has a COCO class |
 
 **Re-scoring** (after changing `object_classes.json` or the box rule): add `--rescore`. Light
 positions and YOLO11m scores are kept; the old table is saved as `sweep_before_rescore.csv`.
