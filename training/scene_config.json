@@ -1,0 +1,37 @@
+{
+  "camera": {
+    "pose_file": "/opt/Unrealprojects/tufaelz/Scripts/pose.json",
+    "height_cm": 165.0,
+    "fill": 0.5,
+    "width": 640,
+    "height": 640
+  },
+  "light": {
+    "radius_cm": 120,
+    "min_radius_cm_by_object": {
+      "Mug": 14.9,
+      "Shoe": 28.2,
+      "Apple": 11.5,
+      "Book": 28.8,
+      "Bottle": 27.6,
+      "Chair": 104.0,
+      "Lamp": 63.9,
+      "Bowl": 25.0,
+      "Phone": 15.6,
+      "Plant": 54.4
+    },
+    "elevation_range_deg": [
+      5,
+      85
+    ],
+    "settings_from": "BP_Torch"
+  },
+  "render": {
+    "settle_frames": 0,
+    "world": "editor",
+    "supersample": 2
+  },
+  "vision": {
+    "weights": "yolo11m.pt"
+  }
+}
