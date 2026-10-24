@@ -2,7 +2,7 @@
   "gpu": 1,
   "unreal": {
     "engine": "/opt/UnrealEngine/UE-5.8.2",
-    "project": "/home/axm6766/tufaelz_copy/tufaelz.uproject",
+    "project": "/opt/Unrealprojects/tufaelz/tufaelz.uproject",
     "map": "Content/XRFramework/Levels/L_XRTemplate.umap",
     "port": 6780
   },

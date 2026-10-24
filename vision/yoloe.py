@@ -16,6 +16,7 @@ os.environ.setdefault('CUDA_DEVICE_ORDER', 'PCI_BUS_ID')    # GPU numbers as in 
 import numpy as np                                          # noqa: E402
 from PIL import Image                                       # noqa: E402
 from ultralytics import YOLOE                               # noqa: E402
+from unreal_bridge import object_catalog                 # noqa: E402
 from ultralytics.utils.metrics import box_iou               # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
@@ -39,10 +40,9 @@ def box_overlap(box, truth):
 
 
 class Detector:
-    def __init__(self, objects=None):
+    def __init__(self, objects=None, collection='common'):
         if objects is None:
-            catalog = Path(CONFIG['unreal']['project']).parent / 'Config' / 'objectlab_objects.json'
-            objects = json.loads(catalog.read_text())
+            objects = object_catalog(collection)
         self.prompts = {name: prompt(name) for name in objects}
         self.names = list(self.prompts.values())
         self.model = YOLOE(str(REPO / CONFIG['vision']['model']))

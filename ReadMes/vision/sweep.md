@@ -37,3 +37,30 @@ and the true box (from `mask.png`). Overwrites any earlier `sweep.csv`; copy it 
 ## Settings used (config.json)
 
 `light.azimuths`, `light.elevations`, and everything the `Unreal` class and `Detector` use.
+
+## Select the tabletop spawner
+
+Run from `/home/mzt5720/vr-nav-rl`. The configured project is
+`/opt/Unrealprojects/tufaelz/tufaelz.uproject`. Restart the bridge after updating its code.
+
+```bash
+bash unreal_bridge/start.sh
+
+# Original spawner (115 objects)
+.venv/bin/python -m vision.sweep render --collection common --out outputs/sweep_common
+.venv/bin/python -m vision.sweep score --collection common --out outputs/sweep_common
+.venv/bin/python -m vision.deliverables outputs/sweep_common
+
+# New spawner (31 objects from Config/objectlab_objects2.json)
+.venv/bin/python -m vision.sweep render --collection new --out outputs/sweep_new
+.venv/bin/python -m vision.sweep score --collection new --out outputs/sweep_new
+.venv/bin/python -m vision.deliverables outputs/sweep_new
+```
+
+Use separate output folders for the two collections. Rendering defaults to `common`.
+Scoring can omit `--collection`: it reads the selection and full prompt catalog saved in
+`settings.json`. Existing sweeps without a collection are treated as `common`.
+Deliverables need no collection option or code changes. Add `--objects Bin Boot` to a new
+render command to capture only those objects while keeping all new catalog names as prompts.
+The existing ObjectLab controller also supports `objectlab.ps1 --collection common spawn Mug`
+and `objectlab.ps1 --collection new spawn Bin` in its Windows PowerShell environment.
