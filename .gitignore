@@ -4,3 +4,5 @@ __pycache__/
 models/
 outputs/
 logs/
+tb_logs/
+*.zip

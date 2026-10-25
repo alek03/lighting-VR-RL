@@ -1,7 +1,18 @@
-# rl/
+# RL
 
-Empty for now. The RL agent goes here; add a readme in this folder for each file as it is
-written.
+Run the trainer from the repository root as a module so imports from the sibling
+`unreal_bridge/` and `vision/` packages resolve:
+
+```sh
+.venv/bin/python -m RL.train_rl
+```
+
+Training uses the scored sweep CSV specified by `--sweep_csv` (default:
+`outputs/sweep_2026-10-17/sweep.csv`). To evaluate the trained policy in Unreal as well:
+
+```sh
+.venv/bin/python -m RL.train_rl --train --evaluate_live
+```
 
 It will use the other two parts:
 
