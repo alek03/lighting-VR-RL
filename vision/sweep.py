@@ -27,7 +27,9 @@ SWEEP_FIELDS = POSITION_FIELDS + [
     'truth_x0', 'truth_y0', 'truth_x1', 'truth_y1']
 
 
-def render(out, objects=None, collection='common'):
+def render(out, objects=None, collection='common', warmup_seconds=30.0):
+    if not np.isfinite(warmup_seconds) or warmup_seconds < 0:
+        raise ValueError('warmup_seconds must be finite and nonnegative')
     from unreal_bridge import Unreal
     settings_path = out / 'settings.json'
     if settings_path.exists():
@@ -49,7 +51,8 @@ def render(out, objects=None, collection='common'):
             # The settings this sweep was made with, for the figures and for later reference.
             settings = {'camera': CONFIG['camera'], 'light': CONFIG['light'], 'image': CONFIG['image'],
                         'table': CONFIG['table'], 'project': CONFIG['unreal']['project'],
-                        'collection': collection, 'objects': catalog}
+                        'collection': collection, 'objects': catalog,
+                        'warmup_seconds': warmup_seconds}
             (out / 'settings.json').write_text(json.dumps(settings, indent=2))
         todo = [n for n in (objects or ue.objects()) if n not in done]
         for k, name in enumerate(todo):
@@ -58,6 +61,13 @@ def render(out, objects=None, collection='common'):
             except RuntimeError as error:
                 print('skipping %s: %s' % (name, error))
                 continue
+            # A depth mask proves geometry exists, not that its materials/textures are ready.
+            # Keep the final camera rendering while Unreal prepares the newly spawned asset.
+            ue.set_light(CONFIG['light']['azimuths'][0], CONFIG['light']['elevations'][0])
+            print('warming up %s for %.1f seconds' % (name, warmup_seconds), flush=True)
+            deadline = time.monotonic() + warmup_seconds
+            while time.monotonic() < deadline:
+                ue.capture()  # discard: these frames may still have fallback materials
             folder = out / 'frames' / name
             folder.mkdir(parents=True, exist_ok=True)
             Image.fromarray(ue.capture_mask().astype(np.uint8) * 255).save(folder / 'mask.png')
@@ -111,10 +121,12 @@ if __name__ == '__main__':
     ap.add_argument('step', choices=['render', 'score'])
     ap.add_argument('--out', type=Path, required=True, help='sweep folder, e.g. outputs/sweep_2026-10-17')
     ap.add_argument('--objects', nargs='+', help='render only these objects (default: all)')
+    ap.add_argument('--warmup-seconds', type=float, default=30.0,
+                    help='render and discard frames after each spawn (default: 30 seconds)')
     ap.add_argument('--collection', choices=['common', 'new'], default=None,
                     help='spawner collection (render default: common; score: saved collection)')
     args = ap.parse_args()
     if args.step == 'render':
-        render(args.out, args.objects, args.collection or 'common')
+        render(args.out, args.objects, args.collection or 'common', args.warmup_seconds)
     else:
         score(args.out, args.collection)

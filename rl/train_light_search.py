@@ -13,6 +13,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 from rl.light_env import ACTION_NAMES, DEFAULT_SWEEP, ELEVATIONS, LightSearchEnv, load_score_table, correct_confidence
@@ -20,6 +21,24 @@ from rl.light_env import ACTION_NAMES, DEFAULT_SWEEP, ELEVATIONS, LightSearchEnv
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = REPO / "deliverables" / "rl_light_search"
+
+
+OBSERVATION_FIELDS = ["azimuth_sin", "azimuth_cos", "elevation", "confidence", "accuracy"]
+
+
+class SearchMetricsCallback(BaseCallback):
+    """Log detector feedback and completed-episode search success."""
+
+    def _on_step(self):
+        infos = self.locals.get("infos", [])
+        if infos:
+            self.logger.record_mean("search/confidence", np.mean([i["confidence"] for i in infos]))
+            self.logger.record_mean("search/accuracy", np.mean([i["correct"] for i in infos]))
+        for done, info in zip(self.locals.get("dones", []), infos):
+            if done:
+                self.logger.record_mean("search/episode_success", float(info["found_correct"]))
+                self.logger.record_mean("search/best_confidence", info["best_confidence"])
+        return True
 
 
 def write_results(model, env, score_table, output, sweep_dir, eval_episodes, seed):
@@ -194,7 +213,7 @@ def _example_contact_sheet(examples, sweep_dir, path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sweep", type=Path, default=DEFAULT_SWEEP, help="YOLOE-scored training.scene sweep.csv")
+    parser.add_argument("--sweep", type=Path, default=DEFAULT_SWEEP, help="vision.sweep score output (sweep.csv)")
     parser.add_argument("--out", type=Path, default=REPO / "deliverables" / "rl_correct_detection", help="model and result folder")
     parser.add_argument("--timesteps", type=int, default=80000)
     parser.add_argument("--eval-episodes", type=int, default=8, help="starting positions per object")
@@ -204,28 +223,45 @@ def main():
     parser.add_argument("--device", default="auto")
     parser.add_argument("--live", action="store_true",
                         help="measure every training/evaluation step in Unreal with YOLOE")
+    parser.add_argument("--tensorboard-log", type=Path, help="default: <out>/tensorboard")
     args = parser.parse_args()
+    if args.timesteps < 1 or args.eval_episodes < 1:
+        parser.error("timesteps and eval-episodes must be positive")
+    settings = json.loads((args.sweep.parent / "settings.json").read_text())
+    collection = settings.get("collection", "common")
+    # Reject incomplete sweeps before a random training action can hit a missing position.
+
     args.out.mkdir(parents=True, exist_ok=True)
     score_table = load_score_table(args.sweep)
+    from rl.light_env import AZIMUTHS
+    for name in {key[0] for key in score_table}:
+        if any((name, az, el) not in score_table for az in AZIMUTHS for el in ELEVATIONS):
+            parser.error("incomplete 60-position sweep for " + name)
     train_env = DummyVecEnv([lambda: Monitor(LightSearchEnv(
         score_table=score_table, sweep_csv=args.sweep, max_steps=args.max_steps,
-        move_penalty=args.move_penalty, seed=args.seed, live=args.live))])
+        move_penalty=args.move_penalty, seed=args.seed, live=args.live, collection=collection))])
     model = PPO(
         "MlpPolicy", train_env, learning_rate=3e-4, n_steps=1024,
         batch_size=256, gamma=0.96, gae_lambda=0.92,
         ent_coef=0.025, verbose=1, seed=args.seed, device=args.device,
         policy_kwargs={"net_arch": [128, 128]},
+        tensorboard_log=str(args.tensorboard_log or args.out / "tensorboard"),
     )
-    model.learn(total_timesteps=args.timesteps, progress_bar=False)
+    model.learn(total_timesteps=args.timesteps, progress_bar=False,
+                callback=SearchMetricsCallback(), tb_log_name="PPO_light_search")
     model_path = args.out / "ppo_light_search"
     model.save(model_path)
     eval_env = LightSearchEnv(score_table=score_table, sweep_csv=args.sweep, max_steps=args.max_steps,
-                              move_penalty=args.move_penalty, seed=args.seed + 1, live=args.live)
+                              move_penalty=args.move_penalty, seed=args.seed + 1, live=args.live, collection=collection)
     summary = write_results(model, eval_env, score_table, args.out, args.sweep.parent,
                             args.eval_episodes, args.seed)
     summary.update({"algorithm": "PPO", "timesteps": args.timesteps,
                     "seed": args.seed, "model": model_path.with_suffix(".zip").name,
-                    "source_sweep": str(args.sweep)})
+                    "source_sweep": str(args.sweep.resolve()),
+                    "collection": collection, "observation_fields": OBSERVATION_FIELDS,
+                    "detector": "vision.yoloe.Detector",
+                    "backend": "live" if args.live else "cached_vision_sweep",
+                    "tensorboard_log": str((args.tensorboard_log or args.out / "tensorboard").resolve())})
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     eval_env.close()
     train_env.close()

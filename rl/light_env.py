@@ -1,7 +1,7 @@
 """Gymnasium environment for bounded flashlight search using YOLOE tag confidence."""
 import csv
-import json
 import math
+import time
 from pathlib import Path
 
 import gymnasium as gym
@@ -9,14 +9,14 @@ import numpy as np
 from gymnasium import spaces
 
 
-DEFAULT_SWEEP = Path(__file__).resolve().parents[1] / "captures" / "sweep_yoloe" / "sweep.csv"
+DEFAULT_SWEEP = Path(__file__).resolve().parents[1] / "outputs" / "sweep_common_2026-10-26" / "sweep.csv"
 AZIMUTHS = tuple(range(0, 360, 30))
 ELEVATIONS = (5, 25, 45, 65, 85)
 ACTION_NAMES = ("azimuth -30", "azimuth +30", "elevation -20", "elevation +20", "hold")
 
 
 def load_score_table(path=DEFAULT_SWEEP):
-    """Load confidence values and source-frame paths from a training.scene sweep CSV."""
+    """Load confidence values and source-frame paths from a vision.sweep score CSV."""
     table = {}
     for row in csv.DictReader(Path(path).open(newline="")):
         key = (row["object"], int(float(row["azimuth"])) % 360, int(float(row["elevation"])))
@@ -57,7 +57,7 @@ class LightSearchEnv(gym.Env):
     metadata = {"render_modes": []}
 
     def __init__(self, score_table=None, sweep_csv=DEFAULT_SWEEP, max_steps=16,
-                 move_penalty=0.005, seed=None, live=False):
+                 move_penalty=0.005, seed=None, live=False, collection="common"):
         super().__init__()
         self.score_table = score_table if score_table is not None else load_score_table(sweep_csv)
         self.sweep_dir = Path(sweep_csv).parent
@@ -69,8 +69,8 @@ class LightSearchEnv(gym.Env):
             raise ValueError("max_steps must be positive and move_penalty non-negative")
         self.action_space = spaces.Discrete(len(ACTION_NAMES))
         self.observation_space = spaces.Box(
-            low=np.zeros(len(self.objects) + 8, dtype=np.float32),
-            high=np.ones(len(self.objects) + 8, dtype=np.float32),
+            low=np.zeros(5, dtype=np.float32),
+            high=np.ones(5, dtype=np.float32),
             dtype=np.float32,
         )
         self.object_name = None
@@ -80,6 +80,7 @@ class LightSearchEnv(gym.Env):
         self.best_confidence = 0.0
         self.steps = 0
         self.visited = set()
+        self.collection = collection
         self.live = live
         self.scene = None
         self.scorer = None
@@ -88,34 +89,25 @@ class LightSearchEnv(gym.Env):
             self._open_live_backend()
 
     def _open_live_backend(self):
-        from bridge_client.unreal_client import UnrealClient
-        from training.scene import CONFIG, Scene
-        from training.vision import YoloE26
+        from unreal_bridge import CONFIG, Unreal
+        from vision.yoloe import Detector
 
-        config = json.loads(CONFIG.read_text())
-        self.ue = UnrealClient(timeout=300)
-        self.ue.__enter__()
-        self.scene = Scene(
-            self.ue, config["camera"]["width"], config["camera"]["height"],
-            config["render"]["world"], config["camera"]["height_cm"],
-            config["camera"]["fill"], config["render"].get("supersample", 2),
-        )
-        self.scorer = YoloE26()
-        self.settle_frames = config["render"]["settle_frames"]
-        self.light_radius = config["light"]["radius_cm"]
+        self.scene = Unreal(collection=self.collection)
+        self.scorer = Detector(collection=self.collection)
+        self.warmup_seconds = CONFIG['image'].get('warmup_seconds', 30.0)
 
     def _measure(self, azimuth, elevation):
         if not self.live:
             return self.score_table[(self.object_name, azimuth, elevation)]
-        self.scene.light(azimuth, elevation, self.light_radius)
-        image = self.scene.capture(self.settle_frames)
-        result = self.scorer.score(image, self.object_name, mask=self.mask)
+        self.scene.set_light(azimuth, elevation)
+        result = self.scorer.score(self.scene.capture(), self.object_name, true_box=self.mask)
         return {"confidence": float(result["confidence"]), "verdict": result["verdict"],
-                "top1_conf": result["top3"][0]["confidence"] if result["top3"] else ""}
+                "top1_conf": result["top"][0][1] if result["top"] else ""}
 
     def _score(self, azimuth, elevation):
         try:
             row = self._measure(azimuth % 360, elevation)
+            self.detector_confidence = float(row["confidence"])
             self.verdict = row["verdict"]
             self.correct = self.verdict == "correct"
             return correct_confidence(row)
@@ -125,19 +117,14 @@ class LightSearchEnv(gym.Env):
 
     def _observation(self):
         angle = math.radians(self.azimuth)
-        identity = np.zeros(len(self.objects), dtype=np.float32)
-        identity[self.object_index[self.object_name]] = 1.0
         state = np.array([
             (math.sin(angle) + 1.0) / 2.0,
             (math.cos(angle) + 1.0) / 2.0,
             (self.elevation - ELEVATIONS[0]) / (ELEVATIONS[-1] - ELEVATIONS[0]),
-            self.confidence,
-            self.best_confidence,
-            self.steps / self.max_steps,
+            self.detector_confidence,
             float(self.correct),
-            float(self.found_correct),
         ], dtype=np.float32)
-        return np.concatenate((identity, state))
+        return state
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -153,9 +140,12 @@ class LightSearchEnv(gym.Env):
             raise ValueError("elevation must be one of %s" % (ELEVATIONS,))
         self.steps = 0
         if self.live:
-            self.ue.call("remove", world=self.scene.world)
-            self.scene.load(self.object_name)
-            self.mask = self.scene.capture_mask()
+            self.scene.spawn(self.object_name)
+            self.scene.set_light(self.azimuth, self.elevation)
+            deadline = time.monotonic() + self.warmup_seconds
+            while time.monotonic() < deadline:
+                self.scene.capture()
+            self.mask = self.scene.true_box()
         self.confidence = self._score(self.azimuth, self.elevation)
         self.best_confidence = self.confidence
         self.found_correct = self.correct
@@ -204,6 +194,3 @@ class LightSearchEnv(gym.Env):
         if self.scene is not None:
             self.scene.close()
             self.scene = None
-        if getattr(self, "ue", None) is not None:
-            self.ue.__exit__(None, None, None)
-            self.ue = None

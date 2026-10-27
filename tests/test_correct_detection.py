@@ -40,6 +40,25 @@ class CorrectDetectionTests(unittest.TestCase):
         self.assertAlmostEqual(reward, -.1)
         self.assertFalse(info['found_correct'])
 
+    def test_observation_has_no_object_identity_or_history(self):
+        table = {('first', 0, 5): row('correct', .4),
+                 ('second', 0, 5): row('correct', .4)}
+        env = LightSearchEnv(score_table=table)
+        first, _ = env.reset(options=dict(object_name='first', azimuth=0, elevation=5))
+        second, _ = env.reset(options=dict(object_name='second', azimuth=0, elevation=5))
+        import numpy as np
+        np.testing.assert_array_equal(first, second)
+        self.assertEqual(first.shape, (5,))
+        self.assertAlmostEqual(float(first[3]), .4)
+        self.assertEqual(first[4], 1)
+
+    def test_observation_retains_confidence_when_prediction_is_wrong(self):
+        env = LightSearchEnv(score_table={('target', 0, 5): row('wrong', .8)})
+        obs, _ = env.reset(options=dict(object_name='target', azimuth=0, elevation=5))
+        self.assertAlmostEqual(float(obs[3]), .8)
+        self.assertEqual(obs[4], 0)
+        self.assertEqual(env.confidence, 0)
+
     def test_export_never_selects_invalid_location(self):
         table = {('missing', 0, 5): row('none', 0),
                  ('wrong', 0, 5): row('wrong', .99),

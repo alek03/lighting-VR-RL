@@ -301,12 +301,69 @@ def overview(example, path):
     fig.savefig(path, dpi=110, facecolor=SURF); plt.close(fig)
 
 
+def rl_deliverables(results, sweep, output):
+    """Add RL confidence, accuracy and selected-position figures to the sweep report."""
+    results, sweep = Path(results), Path(sweep)
+    summary = json.loads((results / 'summary.json').read_text())
+    if Path(summary['source_sweep']).resolve() != (sweep / 'sweep.csv').resolve():
+        raise ValueError('RL results belong to another sweep: ' + summary['source_sweep'])
+    with (results / 'policy_results.csv').open() as stream:
+        rows = list(csv.DictReader(stream))
+    if not rows:
+        raise ValueError('RL policy_results.csv is empty')
+    output.mkdir(parents=True, exist_ok=True)
+    names = [r['object'] for r in rows]
+    x = np.arange(len(rows))
+    fig, axes = plt.subplots(2, 1, figsize=(max(12, len(rows) * .22), 10), facecolor=SURF)
+    for offset, key, title in [(-.25, 'mean_start_confidence', 'Start'),
+                               (0, 'mean_final_confidence', 'Final'),
+                               (.25, 'mean_best_seen_confidence', 'Best visited')]:
+        axes[0].bar(x + offset, [float(r[key]) for r in rows], width=.25, label=title)
+    for offset, key, title in [(-.25, 'start_detection_rate', 'Start accuracy'),
+                               (0, 'final_detection_rate', 'Final accuracy'),
+                               (.25, 'episode_success_rate', 'Episode success')]:
+        axes[1].bar(x + offset, [float(r[key]) for r in rows], width=.25, label=title)
+    for ax in axes:
+        ax.set_xticks(x, names, rotation=90, fontsize=7)
+        ax.set_ylim(0, 1.05)
+        ax.legend()
+        ax.grid(axis='y', alpha=.2)
+    axes[0].set_ylabel('Correct-detection confidence (failures = 0)')
+    axes[1].set_ylabel('Rate')
+    fig.tight_layout()
+    fig.savefig(output / '7_rl_performance.png', dpi=150)
+    plt.close(fig)
+    selected = [r for r in rows if r['best_policy_azimuth']]
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor=SURF)
+    dots = ax.scatter([float(r['best_policy_azimuth']) for r in selected],
+                      [float(r['best_policy_elevation']) for r in selected],
+                      c=[float(r['best_policy_confidence']) for r in selected],
+                      vmin=0, vmax=1, cmap='viridis')
+    for r in selected:
+        ax.annotate(r['object'], (float(r['best_policy_azimuth']), float(r['best_policy_elevation'])),
+                    xytext=(3, 3), textcoords='offset points', fontsize=7)
+    ax.set(xlabel='Light azimuth (degrees)', ylabel='Light elevation (degrees)',
+           title='Best correct position visited by RL; %d objects without a selection' % (len(rows)-len(selected)))
+    ax.set_xticks(range(0, 360, 30))
+    ax.set_yticks([5, 25, 45, 65, 85])
+    fig.colorbar(dots, ax=ax, label='Correct-detection confidence')
+    fig.tight_layout()
+    fig.savefig(output / '8_rl_light_positions.png', dpi=150)
+    plt.close(fig)
+    import shutil
+    for filename in ('summary.json', 'policy_results.csv'):
+        target = output / filename
+        if target.resolve() != (results / filename).resolve():
+            shutil.copy2(results / filename, target)
+
+
 def main():
     global OUT, CAMERA, OBJ, RADIUS, TABLE
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('sweep', help='sweep folder (contains sweep.csv, settings.json and frames/)')
     ap.add_argument('--best-worst', type=int, default=6, help='objects shown in 3_best_vs_worst.png')
     ap.add_argument('--out', help='output folder (default: <sweep>/deliverables)')
+    ap.add_argument('--rl-results', type=Path, help='RL folder containing summary.json and policy_results.csv')
     args = ap.parse_args()
     OUT = Path(args.out or Path(args.sweep) / 'deliverables')
     rows, azimuths, elevations = load(args.sweep)
@@ -330,6 +387,8 @@ def main():
     best_worst(args.sweep, rows, striking, OUT / '3_best_vs_worst.png')
     average_map(rows, azimuths, elevations, camera, OUT / '6_average_lighting_map.png')
     overview(striking[0], OUT / '0_overview.png')
+    if args.rl_results:
+        rl_deliverables(args.rl_results, args.sweep, OUT / 'rl')
     print('%d objects -> %s' % (len(rows), OUT))
 
 

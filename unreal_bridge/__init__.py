@@ -102,6 +102,8 @@ class Unreal:
         the object is drawn: the first time an object is used, Unreal takes a moment to prepare it.
         If camera.fill is set in config.json, then aims and zooms the camera at the object."""
         self.centre = self.call('spawn', object=name)['centre']
+        # Do not test a new object through the previous object's narrow zoom.
+        self.set_camera()
         for _ in range(100):
             if self.capture_mask().any():
                 break
@@ -118,7 +120,16 @@ class Unreal:
         centre, which is off for some models."""
         fov = self.config['camera']['fov']
         self.set_camera(rotation=look_at(self.camera['location'], self.centre), fov=fov)
-        x0, y0, x1, y1 = [v / self.config['image']['size'] for v in self.true_box()]   # 0 to 1
+        # Camera changes can briefly produce an empty mask while rendering catches up.
+        box = None
+        for _ in range(100):
+            box = self.true_box()
+            if box is not None:
+                break
+            time.sleep(0.1)
+        if box is None:
+            raise RuntimeError('Object mask stayed empty after aiming camera; cannot calculate zoom')
+        x0, y0, x1, y1 = [v / self.config['image']['size'] for v in box]   # 0 to 1
         pitch, yaw, roll = self.camera['rotation']
         # Turn by how far the object is off-centre, then zoom by how much of the picture it takes up.
         rotation = [pitch - ((y0 + y1) / 2 - 0.5) * fov, yaw + ((x0 + x1) / 2 - 0.5) * fov, roll]
