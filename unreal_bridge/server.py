@@ -58,12 +58,12 @@ def ping(req):
 
 
 def spawn(req):
-    r = _project('spawn', object=req['object'])
+    r = _project('spawn', object=req['object'], collection=req.get('collection', 'common'))
     return {'object': r['object_name'], 'centre': r['object_bounds_center_cm']}
 
 
 def remove(req):
-    _project('remove')
+    _project('remove', collection=req.get('collection', 'common'))
     return {}
 
 
@@ -123,7 +123,14 @@ def capture(req):
 def capture_mask(req):
     """Save a picture of the object alone, as depth (distance from the camera): empty space is 0,
     the object is not, whatever its colour or material. The camera's settings are restored after."""
-    _, spawner, _ = objectlab_bridge.context('editor')
+    collection = req.get('collection', 'common')
+    if collection == 'new':
+        import objectlab_downloaded
+        _, spawner, _ = objectlab_downloaded.context('editor')
+    elif collection == 'common':
+        _, spawner, _ = objectlab_bridge.context('editor')
+    else:
+        raise ValueError('collection must be common or new')
     obj = spawner.get_editor_property('CurrentObject')
     comp = _camera.capture_component2d
     try:
@@ -143,7 +150,7 @@ def capture_mask(req):
 def cleanup(req):
     """Remove everything we added: object, camera, light."""
     global _camera, _target, _light
-    _project('remove')
+    _project('remove', collection=req.get('collection', 'common'))
     for actor in (_camera, _light):
         if unreal.SystemLibrary.is_valid(actor):
             actor.destroy_actor()

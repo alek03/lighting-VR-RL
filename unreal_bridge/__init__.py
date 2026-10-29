@@ -27,6 +27,15 @@ from PIL import Image
 CONFIG = json.loads((Path(__file__).resolve().parents[1] / 'config.json').read_text())
 
 
+def object_catalog(collection='common', config=CONFIG):
+    """Object names for the selected tabletop spawner."""
+    if collection not in ('common', 'new'):
+        raise ValueError('collection must be common or new')
+    filename = 'objectlab_objects2.json' if collection == 'new' else 'objectlab_objects.json'
+    catalog = Path(config['unreal']['project']).parent / 'Config' / filename
+    return json.loads(catalog.read_text())
+
+
 def look_at(src, dst):
     """[pitch, yaw, roll] that points from src towards dst."""
     d = np.subtract(dst, src)
@@ -52,7 +61,10 @@ def mask_box(mask):
 
 
 class Unreal:
-    def __init__(self, config=CONFIG):
+    def __init__(self, config=CONFIG, collection='common'):
+        if collection not in ('common', 'new'):
+            raise ValueError('collection must be common or new')
+        self.collection = collection
         self.config = config
         self.sock = socket.create_connection(('127.0.0.1', config['unreal']['port']), timeout=120)
         self.buffer = b''
@@ -69,7 +81,7 @@ class Unreal:
 
     def call(self, command, **args):
         """Send one command to server.py and return its reply."""
-        self.sock.sendall(json.dumps(dict(args, command=command)).encode() + b'\n')
+        self.sock.sendall(json.dumps(dict(args, command=command, collection=self.collection)).encode() + b'\n')
         while b'\n' not in self.buffer:
             data = self.sock.recv(65536)
             if not data:
@@ -83,14 +95,15 @@ class Unreal:
 
     def objects(self):
         """Names of the objects that can be put on the table."""
-        catalog = Path(self.config['unreal']['project']).parent / 'Config' / 'objectlab_objects.json'
-        return json.loads(catalog.read_text())
+        return object_catalog(self.collection, self.config)
 
     def spawn(self, name):
         """Put an object on the table (replacing any other); returns its centre. Waits until
         the object is drawn: the first time an object is used, Unreal takes a moment to prepare it.
         If camera.fill is set in config.json, then aims and zooms the camera at the object."""
         self.centre = self.call('spawn', object=name)['centre']
+        # Do not test a new object through the previous object's narrow zoom.
+        self.set_camera()
         for _ in range(100):
             if self.capture_mask().any():
                 break
@@ -107,7 +120,16 @@ class Unreal:
         centre, which is off for some models."""
         fov = self.config['camera']['fov']
         self.set_camera(rotation=look_at(self.camera['location'], self.centre), fov=fov)
-        x0, y0, x1, y1 = [v / self.config['image']['size'] for v in self.true_box()]   # 0 to 1
+        # Camera changes can briefly produce an empty mask while rendering catches up.
+        box = None
+        for _ in range(100):
+            box = self.true_box()
+            if box is not None:
+                break
+            time.sleep(0.1)
+        if box is None:
+            raise RuntimeError('Object mask stayed empty after aiming camera; cannot calculate zoom')
+        x0, y0, x1, y1 = [v / self.config['image']['size'] for v in box]   # 0 to 1
         pitch, yaw, roll = self.camera['rotation']
         # Turn by how far the object is off-centre, then zoom by how much of the picture it takes up.
         rotation = [pitch - ((y0 + y1) / 2 - 0.5) * fov, yaw + ((x0 + x1) / 2 - 0.5) * fov, roll]
