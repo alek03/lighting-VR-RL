@@ -62,6 +62,14 @@ class LightSearchEnv(gym.Env):
         self.score_table = score_table if score_table is not None else load_score_table(sweep_csv)
         self.sweep_dir = Path(sweep_csv).parent
         self.objects = sorted({key[0] for key in self.score_table})
+        self.global_best_confidence = {
+            name: max(
+                (correct_confidence(row) for (object_name, _, _), row in self.score_table.items()
+                 if object_name == name),
+                default=0.0,
+            )
+            for name in self.objects
+        }
         self.object_index = {name: index for index, name in enumerate(self.objects)}
         self.max_steps = int(max_steps)
         self.move_penalty = float(move_penalty)
@@ -172,7 +180,7 @@ class LightSearchEnv(gym.Env):
         self.found_correct = self.found_correct or self.correct
         self.visited.add((self.azimuth, self.elevation))
         self.steps += 1
-        terminated = bool(action == 4)
+        terminated = bool(action == 4 or self.confidence >= 0.95 * self.global_best_confidence[self.object_name])
         truncated = bool(self.steps >= self.max_steps)
         reward = float(self.correct) + self.confidence - old_quality - (self.move_penalty if moved else 0.0)
         if (terminated or truncated) and not self.found_correct:
@@ -183,6 +191,7 @@ class LightSearchEnv(gym.Env):
             "elevation": self.elevation,
             "confidence": self.confidence,
             "best_confidence": self.best_confidence,
+            "global_best_confidence": self.global_best_confidence[self.object_name],
             "visited_positions": len(self.visited),
             "correct": self.correct,
             "verdict": self.verdict,

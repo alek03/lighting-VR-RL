@@ -38,6 +38,7 @@ class SearchMetricsCallback(BaseCallback):
             if done:
                 self.logger.record_mean("search/episode_success", float(info["found_correct"]))
                 self.logger.record_mean("search/best_confidence", info["best_confidence"])
+                self.logger.record_mean("search/optimality_gap", float(info["global_best_confidence"]) - float(info["confidence"]))
         return True
 
 
@@ -213,7 +214,8 @@ def _example_contact_sheet(examples, sweep_dir, path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sweep", type=Path, default=DEFAULT_SWEEP, help="vision.sweep score output (sweep.csv)")
+    parser.add_argument("--train_csv_path", type=Path, default=DEFAULT_SWEEP, help="vision.sweep score output (sweep.csv) for training")
+    parser.add_argument("--eval_csv_path", type=Path, default=DEFAULT_SWEEP, help="vision.sweep score output (sweep.csv) for eval")
     parser.add_argument("--out", type=Path, default=REPO / "deliverables" / "rl_correct_detection", help="model and result folder")
     parser.add_argument("--timesteps", type=int, default=80000)
     parser.add_argument("--eval-episodes", type=int, default=8, help="starting positions per object")
@@ -227,19 +229,22 @@ def main():
     args = parser.parse_args()
     if args.timesteps < 1 or args.eval_episodes < 1:
         parser.error("timesteps and eval-episodes must be positive")
-    settings = json.loads((args.sweep.parent / "settings.json").read_text())
-    collection = settings.get("collection", "common")
-    # Reject incomplete sweeps before a random training action can hit a missing position.
-
     args.out.mkdir(parents=True, exist_ok=True)
-    score_table = load_score_table(args.sweep)
+
+    ## SETUP: Training env, blender object list, camera position, score table
+    train_settings = json.loads((args.train_csv_path.parent / "settings.json").read_text())
+    train_collection = train_settings.get("collection", "common")
+    train_score_table = load_score_table(args.train_csv_path)
     from rl.light_env import AZIMUTHS
-    for name in {key[0] for key in score_table}:
-        if any((name, az, el) not in score_table for az in AZIMUTHS for el in ELEVATIONS):
+    # Reject incomplete sweeps before a random training action can hit a missing position.
+    for name in {key[0] for key in train_score_table}:
+        if any((name, az, el) not in train_score_table for az in AZIMUTHS for el in ELEVATIONS):
             parser.error("incomplete 60-position sweep for " + name)
     train_env = DummyVecEnv([lambda: Monitor(LightSearchEnv(
-        score_table=score_table, sweep_csv=args.sweep, max_steps=args.max_steps,
-        move_penalty=args.move_penalty, seed=args.seed, live=args.live, collection=collection))])
+        score_table=train_score_table, sweep_csv=args.train_csv_path, max_steps=args.max_steps,
+        move_penalty=args.move_penalty, seed=args.seed, live=args.live, collection=train_collection))])
+
+    ## MODEL: PPO Training using Blender objects
     model = PPO(
         "MlpPolicy", train_env, learning_rate=3e-4, n_steps=1024,
         batch_size=256, gamma=0.96, gae_lambda=0.92,
@@ -251,14 +256,21 @@ def main():
                 callback=SearchMetricsCallback(), tb_log_name="PPO_light_search")
     model_path = args.out / "ppo_light_search"
     model.save(model_path)
-    eval_env = LightSearchEnv(score_table=score_table, sweep_csv=args.sweep, max_steps=args.max_steps,
-                              move_penalty=args.move_penalty, seed=args.seed + 1, live=args.live, collection=collection)
-    summary = write_results(model, eval_env, score_table, args.out, args.sweep.parent,
+
+    ## SETUP: Evaluation env, fab object list, camera position, score table
+    eval_settings = json.loads((args.eval_csv_path.parent / "settings.json").read_text())
+    eval_collection = eval_settings.get("collection", "new")
+    eval_score_table = load_score_table(args.eval_csv_path)
+    eval_env = LightSearchEnv(score_table=eval_score_table, sweep_csv=args.eval_csv_path, max_steps=args.max_steps,
+                              move_penalty=args.move_penalty, seed=args.seed + 1, live=args.live, collection=eval_collection)
+    
+    ## RUN: PPO model on eval dataset, log results
+    summary = write_results(model, eval_env, eval_score_table, args.out, args.eval_csv_path.parent,
                             args.eval_episodes, args.seed)
     summary.update({"algorithm": "PPO", "timesteps": args.timesteps,
                     "seed": args.seed, "model": model_path.with_suffix(".zip").name,
-                    "source_sweep": str(args.sweep.resolve()),
-                    "collection": collection, "observation_fields": OBSERVATION_FIELDS,
+                    "source_sweep": str(args.eval_csv_path.resolve()),
+                    "collection": eval_collection, "observation_fields": OBSERVATION_FIELDS,
                     "detector": "vision.yoloe.Detector",
                     "backend": "live" if args.live else "cached_vision_sweep",
                     "tensorboard_log": str((args.tensorboard_log or args.out / "tensorboard").resolve())})
