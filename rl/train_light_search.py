@@ -31,11 +31,15 @@ class SearchMetricsCallback(BaseCallback):
 
     def _on_step(self):
         infos = self.locals.get("infos", [])
-        if infos:
-            self.logger.record_mean("search/confidence", np.mean([i["confidence"] for i in infos]))
-            self.logger.record_mean("search/accuracy", np.mean([i["correct"] for i in infos]))
-        for done, info in zip(self.locals.get("dones", []), infos):
+        rewards = self.locals.get("rewards", [])
+        # if infos:
+        #     self.logger.record_mean("search/confidence", np.mean([i["confidence"] for i in infos]))
+        #     self.logger.record_mean("search/accuracy", np.mean([i["correct"] for i in infos]))
+        for done, info, reward in zip(self.locals.get("dones", []), infos, rewards):
             if done:
+                self.logger.record_mean("search/confidence", float(info["confidence"]))
+                self.logger.record_mean("search/accuracy", info["correct"])
+                self.logger.record_mean("search/reward", float(reward))
                 self.logger.record_mean("search/episode_success", float(info["found_correct"]))
                 self.logger.record_mean("search/best_confidence", info["best_confidence"])
                 self.logger.record_mean("search/optimality_gap", float(info["global_best_confidence"]) - float(info["confidence"]))
@@ -68,7 +72,7 @@ def write_results(model, env, score_table, output, sweep_dir, eval_episodes, see
             starts_conf.append(start_conf)
             terminated = truncated = False
             while not (terminated or truncated):
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=False)
                 obs, _, terminated, truncated, info = env.step(int(action))
                 candidate = (info["confidence"], info["azimuth"], info["elevation"])
                 if info["correct"] and (episode_best is None or candidate[0] > episode_best[0]):

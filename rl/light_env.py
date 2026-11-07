@@ -164,7 +164,7 @@ class LightSearchEnv(gym.Env):
     def step(self, action):
         if not self.action_space.contains(action):
             raise ValueError("action must be in [0, %d]" % (self.action_space.n - 1))
-        old_quality = float(self.correct) + self.confidence
+        old_quality = float(self.correct) * self.detector_confidence
         moved = action != 4
         if action == 0:
             self.azimuth = (self.azimuth - 30) % 360
@@ -180,9 +180,11 @@ class LightSearchEnv(gym.Env):
         self.found_correct = self.found_correct or self.correct
         self.visited.add((self.azimuth, self.elevation))
         self.steps += 1
-        terminated = bool(action == 4 or self.confidence >= 0.95 * self.global_best_confidence[self.object_name])
-        truncated = bool(self.steps >= self.max_steps)
-        reward = float(self.correct) + self.confidence - old_quality - (self.move_penalty if moved else 0.0)
+        terminated = bool(action == 4)
+        truncated = False
+        #truncated = bool(self.steps >= self.max_steps)
+        #- (self.move_penalty if moved else 0.0)
+        reward = (float(self.correct) * self.detector_confidence) - old_quality - (self.move_penalty if moved else 0.0)
         if (terminated or truncated) and not self.found_correct:
             reward -= 0.1
         info = {

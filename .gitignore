@@ -4,6 +4,7 @@ __pycache__/
 models/
 outputs/
 logs/
+checkpoints/
 
 .venv/
 venv/
