@@ -31,8 +31,10 @@ skipped with a message.
 ## score
 
 Runs YOLOE on every picture in `positions.csv` and writes `sweep.csv`: the same columns plus
-`verdict`, `confidence`, `top1`–`top3` with confidences, YOLOE's box, `iou`, `object_fraction`,
-and the true box (from `mask.png`). Overwrites any earlier `sweep.csv`; copy it first to keep it.
+`verdict`, `top1`–`top3` class scores from the single highest-scoring box, `gt_conf` for the
+ground-truth class on that box, `confidence` (equal to `top1_conf`), its `iou` and
+`object_fraction`, and the true box (from `mask.png`). There is no minimum-confidence cutoff for verdicts.
+Overwrites any earlier `sweep.csv`; copy it first to keep it.
 
 ## Settings used (config.json)
 

@@ -16,7 +16,7 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-from rl.light_env import ACTION_NAMES, DEFAULT_SWEEP, ELEVATIONS, LightSearchEnv, load_score_table, correct_confidence
+from rl.light_env import ACTION_NAMES, DEFAULT_EVAL_SWEEP, DEFAULT_TRAIN_SWEEP, ELEVATIONS, LightSearchEnv, load_score_table, correct_confidence
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -72,7 +72,7 @@ def write_results(model, env, score_table, output, sweep_dir, eval_episodes, see
             starts_conf.append(start_conf)
             terminated = truncated = False
             while not (terminated or truncated):
-                action, _ = model.predict(obs, deterministic=False)
+                action, _ = model.predict(obs, deterministic=True)
                 obs, _, terminated, truncated, info = env.step(int(action))
                 candidate = (info["confidence"], info["azimuth"], info["elevation"])
                 if info["correct"] and (episode_best is None or candidate[0] > episode_best[0]):
@@ -133,7 +133,7 @@ def write_results(model, env, score_table, output, sweep_dir, eval_episodes, see
     summary = {
         "objects": len(rows),
         "objective": "correct_detection_then_confidence",
-        "unsuccessful_episode_penalty": 0.1,
+        "unsuccessful_episode_penalty": 0.0,
         "objects_with_correct_detection": sum(r["status"] == "correct_detection_found" for r in rows),
         "objects_policy_missed": sum(r["status"] == "policy_missed_valid_position" for r in rows),
         "objects_without_correct_sweep_position": sum(r["status"] == "no_correct_detection_in_sweep" for r in rows),
@@ -218,13 +218,13 @@ def _example_contact_sheet(examples, sweep_dir, path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train_csv_path", type=Path, default=DEFAULT_SWEEP, help="vision.sweep score output (sweep.csv) for training")
-    parser.add_argument("--eval_csv_path", type=Path, default=DEFAULT_SWEEP, help="vision.sweep score output (sweep.csv) for eval")
+    parser.add_argument("--train_csv_path", type=Path, default=DEFAULT_TRAIN_SWEEP, help="vision.sweep score output (sweep.csv) for training")
+    parser.add_argument("--eval_csv_path", type=Path, default=DEFAULT_EVAL_SWEEP, help="vision.sweep score output (sweep.csv) for eval")
     parser.add_argument("--out", type=Path, default=REPO / "deliverables" / "rl_correct_detection", help="model and result folder")
-    parser.add_argument("--timesteps", type=int, default=80000)
+    parser.add_argument("--timesteps", type=int, default=150000)
     parser.add_argument("--eval-episodes", type=int, default=8, help="starting positions per object")
     parser.add_argument("--max-steps", type=int, default=16)
-    parser.add_argument("--move-penalty", type=float, default=0.005)
+    parser.add_argument("--move-penalty", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--live", action="store_true",
@@ -258,7 +258,7 @@ def main():
     )
     model.learn(total_timesteps=args.timesteps, progress_bar=False,
                 callback=SearchMetricsCallback(), tb_log_name="PPO_light_search")
-    model_path = args.out / "ppo_light_search"
+    model_path = args.out / "ppo_new_reward_delta"
     model.save(model_path)
 
     ## SETUP: Evaluation env, fab object list, camera position, score table

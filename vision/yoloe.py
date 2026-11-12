@@ -16,8 +16,8 @@ os.environ.setdefault('CUDA_DEVICE_ORDER', 'PCI_BUS_ID')    # GPU numbers as in 
 import numpy as np                                          # noqa: E402
 from PIL import Image                                       # noqa: E402
 from ultralytics import YOLOE                               # noqa: E402
+from ultralytics.models.yolo.segment import SegmentationPredictor  # noqa: E402
 from unreal_bridge import object_catalog                 # noqa: E402
-from ultralytics.utils.metrics import box_iou               # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 CONFIG = json.loads((REPO / 'config.json').read_text())
@@ -39,6 +39,31 @@ def box_overlap(box, truth):
             'object_fraction': inter / area(box)}      # low = YOLO's box is mostly not the object
 
 
+def rank_class_scores(class_scores, names, target):
+    ranked = sorted(enumerate(class_scores), key=lambda item: item[1], reverse=True)
+    return {'confidence': round(float(ranked[0][1]), 4),
+            'gt_conf': round(float(class_scores[target]), 4),
+            'top': [(names[index], round(float(conf), 4)) for index, conf in ranked[:3]]}
+
+
+class ClassScorePredictor(SegmentationPredictor):
+    def postprocess(self, preds, img, orig_imgs, **kwargs):
+        raw = preds[1] if isinstance(preds, (tuple, list)) and len(preds) > 1 else None
+        raw = raw.get('one2one', raw) if isinstance(raw, dict) else None
+        scores = raw.get('scores') if raw else None
+        class_scores = None
+        if scores is not None:
+            scores = scores.sigmoid()
+            best_box = scores.max(dim=1).values.argmax(dim=1)
+            class_scores = [scores[i, :, best_box[i]].detach().cpu().tolist() for i in range(len(scores))]
+
+        results = super().postprocess(preds, img, orig_imgs, **kwargs)
+        if class_scores is not None:
+            for result, scores_for_box in zip(results, class_scores):
+                result.class_scores = scores_for_box
+        return results
+
+
 class Detector:
     def __init__(self, objects=None, collection='common'):
         if objects is None:
@@ -48,33 +73,28 @@ class Detector:
         self.model = YOLOE(str(REPO / CONFIG['vision']['model']))
         self.model.set_classes(self.names)
         self.device = 'cuda:%d' % CONFIG['gpu']
+        self.model.predictor = ClassScorePredictor(
+            overrides={'task': self.model.task, 'mode': 'predict', 'device': self.device, 'verbose': False},
+            _callbacks=self.model.callbacks)
+        self.model.predictor.setup_model(model=self.model.model, verbose=False)
 
     def score(self, image, object_name, true_box=None):
         """
         verdict     'correct' (top guess is this object, on the object), 'wrong', or 'none'
-                    (nothing found with at least vision.min_confidence)
-        confidence  the model's confidence for this object anywhere in the picture
-        top         up to 3 (name, confidence) guesses for the spot of the top guess
-        box         the top guess's box; with true_box also iou and object_fraction
+                    (no box returned by the model)
+        gt_conf     ground-truth class score on the highest-scoring box
+        top         up to 3 (name, confidence) class scores on that same box
+        box         the highest-scoring box; with true_box also iou and object_fraction
         """
         if isinstance(image, np.ndarray):
             image = Image.fromarray(image)       # Ultralytics reads numpy arrays as BGR, PIL as RGB
-        boxes = self.model.predict(image, conf=0.01, device=self.device, verbose=False)[0].boxes
+        prediction = self.model.predict(image, conf=0.0, device=self.device, verbose=False)[0]
         target = self.names.index(self.prompts[object_name])
-        mine = boxes.conf[boxes.cls == target]
-        result = {'verdict': 'none', 'confidence': float(mine.max()) if len(mine) else 0.0,
-                  'top': [], 'box': None}
-        if not len(boxes) or boxes.conf.max() < CONFIG['vision']['min_confidence']:
+        ranked = rank_class_scores(prediction.class_scores, self.names, target)
+        result = {'verdict': 'none', **ranked, 'box': None}
+        if not len(prediction.boxes):
             return result
-        order = boxes.conf.argsort(descending=True)
-        best = boxes.xyxy[order[0]]
-        same_spot = box_iou(best[None], boxes.xyxy)[0] > 0.7
-        for i in order:
-            name = self.names[int(boxes.cls[i])]
-            if same_spot[i] and name not in [t[0] for t in result['top']]:
-                result['top'].append((name, round(float(boxes.conf[i]), 4)))
-        result['top'] = result['top'][:3]
-        result['box'] = [round(float(v), 1) for v in best]
+        result['box'] = [round(float(v), 1) for v in prediction.boxes.xyxy[0]]
         on_object = True
         if true_box is not None:
             result.update({k: round(v, 3) for k, v in box_overlap(result['box'], true_box).items()})

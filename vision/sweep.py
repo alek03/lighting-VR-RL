@@ -22,7 +22,8 @@ from unreal_bridge import CONFIG, mask_box, object_catalog
 
 POSITION_FIELDS = ['object', 'elevation', 'azimuth', 'light_x', 'light_y', 'light_z', 'fov', 'frame']
 SWEEP_FIELDS = POSITION_FIELDS + [
-    'verdict', 'confidence', 'top1', 'top1_conf', 'top2', 'top2_conf', 'top3', 'top3_conf',
+    'verdict', 'confidence', 'gt_conf', 'top1', 'top1_conf',
+    'top2', 'top2_conf', 'top3', 'top3_conf',
     'box_x0', 'box_y0', 'box_x1', 'box_y1', 'iou', 'object_fraction',
     'truth_x0', 'truth_y0', 'truth_x1', 'truth_y1']
 
@@ -104,7 +105,7 @@ def score(out, collection=None):
                 truth[name] = mask_box(np.asarray(Image.open(out / 'frames' / name / 'mask.png')) > 0)
                 print('scoring', name, flush=True)
             r = detector.score(str(out / row['frame']), name, true_box=truth[name])
-            row.update(verdict=r['verdict'], confidence=round(r['confidence'], 4))
+            row.update(verdict=r['verdict'], confidence=r['confidence'], gt_conf=r['gt_conf'])
             for i, (guess, conf) in enumerate(r['top'], 1):
                 row['top%d' % i], row['top%d_conf' % i] = guess, conf
             if r['box']:

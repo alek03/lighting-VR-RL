@@ -1,6 +1,7 @@
 """Gymnasium environment for bounded flashlight search using YOLOE tag confidence."""
 import csv
 import math
+import re
 import time
 from pathlib import Path
 
@@ -9,7 +10,10 @@ import numpy as np
 from gymnasium import spaces
 
 
-DEFAULT_SWEEP = Path(__file__).resolve().parents[1] / "outputs" / "sweep_common_2026-10-26" / "sweep.csv"
+REPO = Path(__file__).resolve().parents[1]
+DEFAULT_TRAIN_SWEEP = REPO / "outputs" / "sweep_common_2026-11-10" / "sweep.csv"
+DEFAULT_EVAL_SWEEP = REPO / "outputs" / "sweep_fab_2026-11-10" / "sweep.csv"
+DEFAULT_SWEEP = DEFAULT_TRAIN_SWEEP
 AZIMUTHS = tuple(range(0, 360, 30))
 ELEVATIONS = (5, 25, 45, 65, 85)
 ACTION_NAMES = ("azimuth -30", "azimuth +30", "elevation -20", "elevation +20", "hold")
@@ -21,10 +25,17 @@ def load_score_table(path=DEFAULT_SWEEP):
     for row in csv.DictReader(Path(path).open(newline="")):
         key = (row["object"], int(float(row["azimuth"])) % 360, int(float(row["elevation"])))
         table[key] = {
+            "object": row["object"],
             "tag": row.get("tag", row["object"]),
             "confidence": float(row["confidence"]),
+            "gt_conf": float(row.get("gt_conf", row.get("confidence", 0.0))),
             "verdict": row.get("verdict", ""),
-            "top1_conf": row.get("top1_conf", ""),
+            "top1": row.get("top1", row.get("object", "")),
+            "top1_conf": float(row.get("top1_conf", row.get("confidence", 0.0))),
+            "top2": row.get("top2", ""),
+            "top2_conf": float(row.get("top2_conf", 0.0)),
+            "top3": row.get("top3", ""),
+            "top3_conf": float(row.get("top3_conf", 0.0)),
             "frame": row.get("frame", ""),
             "light_x": float(row["light_x"]),
             "light_y": float(row["light_y"]),
@@ -37,11 +48,31 @@ def load_score_table(path=DEFAULT_SWEEP):
     return table
 
 
+def _normalize_label(name):
+    text = str(name or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r'(?<!^)(?=[A-Z])', ' ', text)
+    text = re.sub(r'\s+', ' ', text).lower()
+    return text
+
+
+def quality_from_row(row):
+    """Quality score = ground-truth confidence minus the strongest competing label."""
+    gt_conf = float(row.get("gt_conf", row.get("confidence", 0.0)))
+    top1_name = _normalize_label(row.get("top1", row.get("object", "")))
+    gt_name = _normalize_label(row.get("object", row.get("tag", "")))
+    top1_conf = float(row.get("top1_conf", row.get("confidence", 0.0)))
+    top2_conf = float(row.get("top2_conf", 0.0))
+    competitor = top2_conf if top1_name == gt_name and top2_conf else top1_conf
+    return gt_conf - competitor
+
+
 def correct_confidence(row):
     """Confidence of the validated top detection; failures score zero."""
     if row.get("verdict") != "correct":
         return 0.0
-    return float(row.get("top1_conf") or row["confidence"])
+    return float(row.get("gt_conf") if row.get("gt_conf") is not None else row.get("top1_conf") or row["confidence"])
 
 
 class LightSearchEnv(gym.Env):
@@ -85,7 +116,10 @@ class LightSearchEnv(gym.Env):
         self.azimuth = 0
         self.elevation = 45
         self.confidence = 0.0
+        self.correct_confidence = 0.0
+        self.quality = 0.0
         self.best_confidence = 0.0
+        self.best_quality = 0.0
         self.steps = 0
         self.visited = set()
         self.collection = collection
@@ -109,8 +143,19 @@ class LightSearchEnv(gym.Env):
             return self.score_table[(self.object_name, azimuth, elevation)]
         self.scene.set_light(azimuth, elevation)
         result = self.scorer.score(self.scene.capture(), self.object_name, true_box=self.mask)
-        return {"confidence": float(result["confidence"]), "verdict": result["verdict"],
-                "top1_conf": result["top"][0][1] if result["top"] else ""}
+        top = result.get("top", [])
+        return {
+            "object": self.object_name,
+            "confidence": float(result["confidence"]),
+            "gt_conf": float(result.get("gt_conf", result["confidence"])),
+            "verdict": result["verdict"],
+            "top1": top[0][0] if top else self.object_name,
+            "top1_conf": float(top[0][1]) if top else float(result["confidence"]),
+            "top2": top[1][0] if len(top) > 1 else "",
+            "top2_conf": float(top[1][1]) if len(top) > 1 else 0.0,
+            "top3": top[2][0] if len(top) > 2 else "",
+            "top3_conf": float(top[2][1]) if len(top) > 2 else 0.0,
+        }
 
     def _score(self, azimuth, elevation):
         try:
@@ -118,7 +163,9 @@ class LightSearchEnv(gym.Env):
             self.detector_confidence = float(row["confidence"])
             self.verdict = row["verdict"]
             self.correct = self.verdict == "correct"
-            return correct_confidence(row)
+            self.correct_confidence = correct_confidence(row)
+            self.quality = quality_from_row(row)
+            return self.quality
         except KeyError as exc:
             raise ValueError("missing sweep score for %s at az=%d el=%d" % (
                 self.object_name, azimuth % 360, elevation)) from exc
@@ -154,17 +201,20 @@ class LightSearchEnv(gym.Env):
             while time.monotonic() < deadline:
                 self.scene.capture()
             self.mask = self.scene.true_box()
-        self.confidence = self._score(self.azimuth, self.elevation)
+        self._score(self.azimuth, self.elevation)
+        self.confidence = self.correct_confidence
         self.best_confidence = self.confidence
+        self.best_quality = self.quality
         self.found_correct = self.correct
         self.visited = {(self.azimuth, self.elevation)}
         return self._observation(), {"object": self.object_name, "confidence": self.confidence,
-                                     "correct": self.correct, "verdict": self.verdict}
+                         "quality": self.quality, "correct": self.correct,
+                         "verdict": self.verdict}
 
     def step(self, action):
         if not self.action_space.contains(action):
             raise ValueError("action must be in [0, %d]" % (self.action_space.n - 1))
-        old_quality = float(self.correct) * self.detector_confidence
+        # old_quality = float(self.quality)
         moved = action != 4
         if action == 0:
             self.azimuth = (self.azimuth - 30) % 360
@@ -175,24 +225,25 @@ class LightSearchEnv(gym.Env):
         elif action == 3:
             self.elevation = min(ELEVATIONS[-1], self.elevation + 20)
 
-        self.confidence = self._score(self.azimuth, self.elevation)
+        self._score(self.azimuth, self.elevation)
+        self.confidence = self.correct_confidence
         self.best_confidence = max(self.best_confidence, self.confidence)
+        self.best_quality = max(self.best_quality, self.quality)
         self.found_correct = self.found_correct or self.correct
         self.visited.add((self.azimuth, self.elevation))
         self.steps += 1
         terminated = bool(action == 4)
-        truncated = False
-        #truncated = bool(self.steps >= self.max_steps)
-        #- (self.move_penalty if moved else 0.0)
-        reward = (float(self.correct) * self.detector_confidence) - old_quality - (self.move_penalty if moved else 0.0)
-        if (terminated or truncated) and not self.found_correct:
-            reward -= 0.1
+        truncated = bool(self.steps >= self.max_steps)
+        reward = self.quality
+        #reward = self.quality - old_quality
         info = {
             "object": self.object_name,
             "azimuth": self.azimuth,
             "elevation": self.elevation,
             "confidence": self.confidence,
             "best_confidence": self.best_confidence,
+            "quality": self.quality,
+            "best_quality": self.best_quality,
             "global_best_confidence": self.global_best_confidence[self.object_name],
             "visited_positions": len(self.visited),
             "correct": self.correct,

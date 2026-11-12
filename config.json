@@ -24,7 +24,6 @@
   },
   "vision": {
     "model": "models/yoloe-26x-seg.pt",
-    "min_confidence": 0.25,
     "on_object": 0.5,
     "name_fixes": {}
   },

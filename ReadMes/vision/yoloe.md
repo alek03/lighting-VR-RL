@@ -20,11 +20,14 @@ result = det.score(image, "Mug", true_box=box)    # image: numpy RGB array or a 
 
 | Key | Meaning |
 |---|---|
-| `verdict` | `correct` (top guess is this object, and its box is on the object), `wrong`, or `none` (nothing found with at least `vision.min_confidence`) |
-| `confidence` | The model's confidence for this object anywhere in the picture (0 if never) |
-| `top` | Up to 3 `(name, confidence)` guesses for the spot of the top guess |
-| `box` | The top guess's box `[x0, y0, x1, y1]` |
-| `iou`, `object_fraction` | Only with `true_box`: how YOLOE's box overlaps the true box |
+| `verdict` | `correct` (top class is this object, and its box is on the object), `wrong`, or `none` (no box returned) |
+| `confidence` | Highest class score on the highest-scoring box; the same value as `top1_conf` |
+| `gt_conf` | Ground-truth class score on the highest-scoring box, even when it is not one of the top three classes |
+| `top` | Up to 3 `(name, confidence)` class scores from the same highest-scoring box |
+| `box` | The highest-scoring box `[x0, y0, x1, y1]` |
+| `iou`, `object_fraction` | Only with `true_box`: how that one box overlaps the true box |
+
+There is no minimum-confidence cutoff for the verdict; low-confidence predictions are still ranked.
 
 "Box on the object" means IoU or object fraction is at least `vision.on_object` (0.5). Without
 `true_box`, only the name is checked.
@@ -45,7 +48,7 @@ one of them.
 
 ## Settings used (config.json)
 
-`vision` (`model`, `min_confidence`, `on_object`, `name_fixes`), `gpu`, `unreal.project` (for the
+`vision` (`model`, `on_object`, `name_fixes`), `gpu`, `unreal.project` (for the
 object list).
 
 ## Good to know
