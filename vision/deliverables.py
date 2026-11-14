@@ -360,7 +360,7 @@ def rl_deliverables(results, sweep, output):
 def main():
     global OUT, CAMERA, OBJ, RADIUS, TABLE
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('sweep', help='sweep folder (contains sweep.csv, settings.json and frames/)')
+    ap.add_argument('--sweep', help='sweep folder (contains sweep.csv, settings.json and frames/)')
     ap.add_argument('--best-worst', type=int, default=6, help='objects shown in 3_best_vs_worst.png')
     ap.add_argument('--out', help='output folder (default: <sweep>/deliverables)')
     ap.add_argument('--rl-results', type=Path, help='RL folder containing summary.json and policy_results.csv')

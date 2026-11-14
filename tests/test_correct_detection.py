@@ -41,23 +41,29 @@ class CorrectDetectionTests(unittest.TestCase):
         self.assertFalse(info['found_correct'])
 
     def test_observation_has_no_object_identity_or_history(self):
-        table = {('first', 0, 5): row('correct', .4),
-                 ('second', 0, 5): row('correct', .4)}
+        table = {
+            ('first', 0, 5): dict(row('correct', .4), object='first', top1='first',
+                                  gt_conf=.4, top2_conf=.1),
+            ('second', 0, 5): dict(row('correct', .4), object='second', top1='second',
+                                   gt_conf=.4, top2_conf=.1),
+        }
         env = LightSearchEnv(score_table=table)
         first, _ = env.reset(options=dict(object_name='first', azimuth=0, elevation=5))
         second, _ = env.reset(options=dict(object_name='second', azimuth=0, elevation=5))
         import numpy as np
         np.testing.assert_array_equal(first, second)
-        self.assertEqual(first.shape, (5,))
-        self.assertAlmostEqual(float(first[3]), .4)
-        self.assertEqual(first[4], 1)
+        self.assertEqual(first.shape, (4,))
+        self.assertAlmostEqual(float(first[3]), .3)
+        self.assertTrue(env.observation_space.contains(first))
 
-    def test_observation_retains_confidence_when_prediction_is_wrong(self):
-        env = LightSearchEnv(score_table={('target', 0, 5): row('wrong', .8)})
+    def test_observation_contains_negative_quality_for_wrong_prediction(self):
+        wrong_row = dict(row('wrong', .8), object='target', top1='other',
+                         gt_conf=.6, top1_conf=.8)
+        env = LightSearchEnv(score_table={('target', 0, 5): wrong_row})
         obs, _ = env.reset(options=dict(object_name='target', azimuth=0, elevation=5))
-        self.assertAlmostEqual(float(obs[3]), .8)
-        self.assertEqual(obs[4], 0)
-        self.assertEqual(env.confidence, 0)
+        self.assertEqual(obs.shape, (4,))
+        self.assertAlmostEqual(float(obs[3]), -.2)
+        self.assertTrue(env.observation_space.contains(obs))
 
     def test_export_never_selects_invalid_location(self):
         table = {('missing', 0, 5): row('none', 0),

@@ -70,8 +70,8 @@ def quality_from_row(row):
 
 def correct_confidence(row):
     """Confidence of the validated top detection; failures score zero."""
-    if row.get("verdict") != "correct":
-        return 0.0
+    # if row.get("verdict") != "correct":
+    #     return 0.0
     return float(row.get("gt_conf") if row.get("gt_conf") is not None else row.get("top1_conf") or row["confidence"])
 
 
@@ -95,7 +95,7 @@ class LightSearchEnv(gym.Env):
         self.objects = sorted({key[0] for key in self.score_table})
         self.global_best_confidence = {
             name: max(
-                (correct_confidence(row) for (object_name, _, _), row in self.score_table.items()
+                (float(row.get("gt_conf", 0.0)) for (object_name, _, _), row in self.score_table.items()
                  if object_name == name),
                 default=0.0,
             )
@@ -108,8 +108,8 @@ class LightSearchEnv(gym.Env):
             raise ValueError("max_steps must be positive and move_penalty non-negative")
         self.action_space = spaces.Discrete(len(ACTION_NAMES))
         self.observation_space = spaces.Box(
-            low=np.zeros(5, dtype=np.float32),
-            high=np.ones(5, dtype=np.float32),
+            low=np.array([0.0, 0.0, 0.0, -1.0], dtype=np.float32),
+            high=np.ones(4, dtype=np.float32),
             dtype=np.float32,
         )
         self.object_name = None
@@ -176,8 +176,7 @@ class LightSearchEnv(gym.Env):
             (math.sin(angle) + 1.0) / 2.0,
             (math.cos(angle) + 1.0) / 2.0,
             (self.elevation - ELEVATIONS[0]) / (ELEVATIONS[-1] - ELEVATIONS[0]),
-            self.detector_confidence,
-            float(self.correct),
+            self.quality,
         ], dtype=np.float32)
         return state
 
@@ -214,7 +213,7 @@ class LightSearchEnv(gym.Env):
     def step(self, action):
         if not self.action_space.contains(action):
             raise ValueError("action must be in [0, %d]" % (self.action_space.n - 1))
-        # old_quality = float(self.quality)
+        old_quality = float(self.quality)
         moved = action != 4
         if action == 0:
             self.azimuth = (self.azimuth - 30) % 360
@@ -234,8 +233,8 @@ class LightSearchEnv(gym.Env):
         self.steps += 1
         terminated = bool(action == 4)
         truncated = bool(self.steps >= self.max_steps)
-        reward = self.quality
-        #reward = self.quality - old_quality
+        #reward = self.quality
+        reward = self.quality - old_quality
         info = {
             "object": self.object_name,
             "azimuth": self.azimuth,

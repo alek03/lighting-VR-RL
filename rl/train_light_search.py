@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = REPO / "deliverables" / "rl_light_search"
 
 
-OBSERVATION_FIELDS = ["azimuth_sin", "azimuth_cos", "elevation", "confidence", "accuracy"]
+OBSERVATION_FIELDS = ["azimuth_sin", "azimuth_cos", "elevation", "quality"]
 
 
 class SearchMetricsCallback(BaseCallback):
